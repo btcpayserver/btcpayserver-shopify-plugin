@@ -1,0 +1,6 @@
+**/bin/**/*
+**/obj
+.idea
+Plugins/packed
+.vs/
+monero_wallet/
