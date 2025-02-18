@@ -1,12 +1,11 @@
-﻿using BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
+namespace BTCPayServer.Plugins.ShopifyPlugin.Clients;
 
 public class CaptureOrderRequest
 {

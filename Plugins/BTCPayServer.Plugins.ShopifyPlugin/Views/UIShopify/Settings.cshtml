@@ -1,11 +1,161 @@
 @using BTCPayServer.Abstractions.Extensions
-@using BTCPayServer.Abstractions.Services
-@using BTCPayServer.Client
-@using BTCPayServer.Controllers
-@using BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models
+@using BTCPayServer.Plugins.ShopifyPlugin.ViewModels
 @using Microsoft.AspNetCore.Routing
 @model ShopifySettingsViewModel
 @{
     ViewData.SetActivePage("Shopify", "Update Shopify Plugin Settings", "Shopify");
     Layout = "_Layout";
+    bool shopifyCredsSet = Model.Step != ShopifySettingsViewModel.State.WaitingClientCreds;
+    var storeId = (string)this.Context.GetRouteValue("storeId");
+    var pluginUrl = this.Url.ActionAbsolute(Context.Request, nameof(Index), new { storeId = storeId }).AbsoluteUri;
+
+    bool expandClientApp = Model.Step == ShopifySettingsViewModel.State.WaitingClientCreds;
+    bool expandDeploy = Model.Step == ShopifySettingsViewModel.State.WaitingForDeploy;
+    bool expandInstall = Model.Step == ShopifySettingsViewModel.State.WaitingForInstall;
+}
+@section PageHeadContent {
+    <link rel="stylesheet" href="~/vendor/highlightjs/default.min.css" asp-append-version="true">
+}
+
+
+<form method="post">
+    <div class="row">
+        <div class="sticky-header">
+            <h2 class="my-1">
+                @ViewData["Title"]
+                <small>
+                    <a href="https://docs.btcpayserver.org/ShopifyV2/" target="_blank" rel="noreferrer noopener"
+                       title="@StringLocalizer["More information..."]">
+                        <vc:icon symbol="info"/>
+                    </a>
+                </small>
+            </h2>
+            <div>
+                @if (Model.Step != ShopifySettingsViewModel.State.WaitingClientCreds)
+                {
+                    <button name="command" type="submit" class="btn btn-danger" value="Reset" text-translate="true">
+                        Reset
+                    </button>
+                }
+            </div>
+        </div>
+        <partial name="_StatusMessage"/>
+        <div class="col-xxl-constrain col-xl-8">
+            <div class="accordion" id="accordionExample">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingOne">
+                        <button class="accordion-button @(expandClientApp ? "" : "collapsed")" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="@expandClientApp" aria-controls="collapseOne">
+                            <h5 class="d-flex content-center">
+                                @if (Model.ClientCredsConfigured)
+                                {
+                                    <vc:icon symbol="checkmark" css-class="text-success mr-1"></vc:icon>
+                                }
+                                else
+                                {
+                                    <vc:icon symbol="cross" css-class="text-danger mr-1"></vc:icon>
+                                }
+                                <span>Setup the ClientId and ClientSecret</span>
+                            </h5>
+                            <vc:icon symbol="caret-down"/>
+                        </button>
+                    </h2>
+                    <div id="collapseOne" class="accordion-collapse collapse @(expandClientApp ? "show" : "")" aria-labelledby="headingOne" data-bs-parent="#accordionExample">
+                        <div class="accordion-body">
+                            <p text-translate="true">ADD INSTRUCTION TO CREATE APP MANUALLY IN PARTNER PORTAL</p>
+
+                            <div class="form-group">
+                                <label asp-for="ClientId" class="form-label"></label>
+                                <input asp-for="ClientId" class="form-control" readonly="@shopifyCredsSet" disabled="@shopifyCredsSet"/>
+                                <span asp-validation-for="ClientId" class="text-danger"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label asp-for="ClientSecret" class="form-label"></label>
+                                <input asp-for="ClientSecret" class="form-control" type="password" value="@Model?.ClientSecret"
+                                       readonly="@shopifyCredsSet" disabled="@shopifyCredsSet"/>
+                                <span asp-validation-for="ClientSecret" class="text-danger"></span>
+                            </div>
+                            @if (Model.Step == ShopifySettingsViewModel.State.WaitingClientCreds)
+                            {
+                                <button name="command" type="submit" class="btn btn-primary" value="SaveAppCredentials" text-translate="true">Save</button>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingTwo">
+                        <button class="accordion-button @(expandDeploy ? "" : "collapsed")" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="@expandDeploy" aria-controls="collapseTwo">
+                            <h5>
+                                @if (Model.AppDeployed)
+                                {
+                                    <vc:icon symbol="checkmark" css-class="text-success mr-1"></vc:icon>
+                                }
+                                else
+                                {
+                                    <vc:icon symbol="cross" css-class="text-danger mr-1"></vc:icon>
+                                }
+                                <span>Deploy the App</span>
+                            </h5>
+                            <vc:icon symbol="caret-down"/>
+                        </button>
+                    </h2>
+                    <div id="collapseTwo" class="accordion-collapse collapse @(expandDeploy ? "show" : "")" aria-labelledby="headingTwo" data-bs-parent="#accordionExample">
+                        <div class="accordion-body">
+                            @if (!Model.ClientCredsConfigured)
+                            {
+                                <span>Please complete the first step first</span>
+                            } else
+                            {
+                                <component param-PluginUrl="@pluginUrl" param-StoreId="@storeId" type="typeof(BTCPayServer.Plugins.ShopifyPlugin.Blazor.ShopifyDeploy)" render-mode="ServerPrerendered"/>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingThree">
+                        <button class="accordion-button @(expandInstall ? "" : "collapsed")" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="@expandInstall" aria-controls="collapseThree">
+                            <h5>
+                                @if (Model.AppInstalled)
+                                {
+                                    <vc:icon symbol="checkmark" css-class="text-success mr-1"></vc:icon>
+                                }
+                                else
+                                {
+                                    <vc:icon symbol="cross" css-class="text-danger mr-1"></vc:icon>
+                                }
+                                <span>Install the app on your shopify's store</span>
+                            </h5>
+                            <vc:icon symbol="caret-down"/>
+                        </button>
+                    </h2>
+                    <div id="collapseThree" class="accordion-collapse collapse @(expandInstall ? "show" : "")" aria-labelledby="headingThree" data-bs-parent="#accordionExample">
+                        <div class="accordion-body">
+                            @if (Model.AppInstalled)
+                            {
+                                <span>You already installed this app on your Shopify store</span>
+                            }
+                            else if (!Model.AppDeployed)
+                            {
+                                <span>You need to complete the previous step first</span>
+                            }
+                            else
+                            {
+                                <span>ADD INSTRUCTION TO INSTALL THE APP TO SHOPIFY STORE</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</form>
+@section PageFootContent {
+    <link rel="stylesheet" href="~/vendor/highlightjs/default.min.css" asp-append-version="true">
+    <script>
+        function RefreshPage()
+        {
+            location.reload();
+        }
+    </script>
 }

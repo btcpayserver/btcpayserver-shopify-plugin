@@ -1,5 +1,5 @@
 ﻿#nullable enable
-using BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models;
+using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using Newtonsoft.Json;
 using System;
 

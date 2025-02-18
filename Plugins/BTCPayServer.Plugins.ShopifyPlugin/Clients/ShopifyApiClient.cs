@@ -5,7 +5,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models;
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using Google.Apis.Auth.OAuth2;
@@ -17,12 +16,11 @@ using Newtonsoft.Json.Serialization;
 using System.Globalization;
 using BTCPayServer.Plugins.ShopifyPlugin.JsonConverters;
 using Newtonsoft.Json.Converters;
-using BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
 using System.Text.RegularExpressions;
 using System.Security;
 using Microsoft.AspNetCore.WebUtilities;
 
-namespace BTCPayServer.Plugins.ShopifyPlugin.Services
+namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 {
     public class ShopifyAppClient
     {
@@ -32,7 +30,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Services
 		public ShopifyAppClient(HttpClient httpClient, ShopifyAppCredentials appCredentials)
 		{
 			_httpClient = httpClient;
-			this._credentials = appCredentials;
+			_credentials = appCredentials;
 		}
 		/// <summary>
 		/// Validate a session token
@@ -224,17 +222,6 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Services
             var strResp = await SendRequest(req);
             return JsonConvert.DeserializeObject<TransactionsCreateResp>(strResp);
         }
-
-        public async Task<List<ShopifyOrderVm>> RetrieveAllOrders()
-        {
-            var req = CreateRequest(HttpMethod.Get, "orders.json");
-
-            var strResp = await SendRequest(req);
-
-            return JObject.Parse(strResp)["orders"].ToObject<List<ShopifyOrderVm>>();
-
-        }
-
 
         public async Task<ShopifyOrder> GetOrderByCheckoutToken(string checkoutToken, bool withTransactions = false)
         {

@@ -9,6 +9,8 @@ namespace BTCPayServer.Plugins.ShopifyPlugin
 			public string? ClientId { get; set; }
 			public string? ClientSecret { get; set; }
 		}
+
+		public string? DeployedCommit { get; set; }
 		public AppCreds? App { get; set; }
 		public string? ShopUrl { get; set; }
 		public string? AccessToken { get; set; }

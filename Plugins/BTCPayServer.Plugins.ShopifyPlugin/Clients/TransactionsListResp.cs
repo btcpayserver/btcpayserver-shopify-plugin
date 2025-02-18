@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models;
+namespace BTCPayServer.Plugins.ShopifyPlugin.Clients;
 
 public class TransactionsListResp
 {

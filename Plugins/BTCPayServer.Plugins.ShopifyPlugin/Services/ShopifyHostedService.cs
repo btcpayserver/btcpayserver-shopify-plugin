@@ -4,8 +4,7 @@ using BTCPayServer.Events;
 using BTCPayServer.HostedServices;
 using BTCPayServer.Logging;
 using BTCPayServer.Plugins.Shopify.ApiModels;
-using BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
-using BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models;
+using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Services.Invoices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -155,9 +154,9 @@ public class ShopifyHostedService : EventHostedServiceBase
             return logs;
         }
 
-        var createTransaction = new BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models.TransactionsCreateReq
+        var createTransaction = new BTCPayServer.Plugins.ShopifyPlugin.Clients.TransactionsCreateReq
 		{
-            transaction = new BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models.TransactionsCreateReq.DataHolder
+            transaction = new Clients.TransactionsCreateReq.DataHolder
             {
                 parent_id = parentId.Id,
                 currency = invoice.Currency,

@@ -17,7 +17,6 @@ using BTCPayServer.Services.Invoices;
 using System.Collections.Generic;
 using BTCPayServer.Plugins.ShopifyPlugin.Services;
 using System.Net.Http;
-using BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models;
 using BTCPayServer.Client.Models;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
@@ -34,21 +33,27 @@ using NBitpayClient;
 using System.Globalization;
 using BTCPayServer.Lightning.LndHub;
 using System.Threading;
+using BTCPayServer.Configuration;
+using BTCPayServer.Plugins.ShopifyPlugin.Clients;
+using BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
+using Microsoft.Extensions.Configuration;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin;
 
 [Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie, Policy = Policies.CanViewProfile)]
 [AutoValidateAntiforgeryToken]
-public class UIShopifyController : Controller
+public class UIShopifyV2Controller : Controller
 {
 	private readonly StoreRepository _storeRepo;
 	private readonly InvoiceRepository _invoiceRepository;
 	private readonly UIInvoiceController _invoiceController;
-	public UIShopifyController
+
+	public UIShopifyV2Controller
 		(
 		ShopifyClientFactory shopifyClientFactory,
 		StoreRepository storeRepo,
 		UIInvoiceController invoiceController,
+		IConfiguration configuration,
 		InvoiceRepository invoiceRepository)
 	{
 		_storeRepo = storeRepo;
@@ -61,7 +66,7 @@ public class UIShopifyController : Controller
 	public ShopifyClientFactory ShopifyClientFactory { get; }
 
 	[AllowAnonymous]
-	[HttpGet("~/stores/{storeId}/plugins/shopify")]
+	[HttpGet("~/stores/{storeId}/plugins/shopify-v2")]
 	public async Task<IActionResult> Index(string storeId, string? id_token = null)
 	{
 		if (id_token is not null)
@@ -113,28 +118,24 @@ public class UIShopifyController : Controller
 		return RedirectToAction(nameof(Settings), new { storeId });
 	}
 
-	[Route("~/stores/{storeId}/plugins/shopify/settings")]
+	[Route("~/stores/{storeId}/plugins/shopify-v2/settings")]
 	[Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie, Policy = Policies.CanModifyStoreSettings)]
 	public async Task<IActionResult> Settings(string storeId,
 			ShopifySettingsViewModel vm, [FromForm] string? command = null)
 	{
-		if (command == "SaveAppSettings")
+		if (command == "SaveAppCredentials")
 		{
-			if (vm.ClientId is not null)
+			vm.ClientId ??= "";
+			vm.ClientId = vm.ClientId.Trim();
+			if (!Regex.IsMatch(vm.ClientId, "[a-f0-9]{32,32}"))
 			{
-				vm.ClientId = vm.ClientId.Trim();
-				if (!Regex.IsMatch(vm.ClientId, "[a-f0-9]{32,32}"))
-				{
-					ModelState.AddModelError(nameof(vm.ClientId), "Invalid client id");
-				}
+				ModelState.AddModelError(nameof(vm.ClientId), "Invalid client id");
 			}
-			if (vm.ClientSecret is not null)
+			vm.ClientSecret ??= "";
+			vm.ClientSecret = vm.ClientSecret.Trim();
+			if (!Regex.IsMatch(vm.ClientSecret, "[a-f0-9]{32,32}"))
 			{
-				vm.ClientSecret = vm.ClientSecret.Trim();
-				if (!Regex.IsMatch(vm.ClientSecret, "[a-f0-9]{32,32}"))
-				{
-					ModelState.AddModelError(nameof(vm.ClientSecret), "Invalid client secret");
-				}
+				ModelState.AddModelError(nameof(vm.ClientSecret), "Invalid client secret");
 			}
 			if (!ModelState.IsValid)
 				return View("/Views/UIShopify/Settings.cshtml", vm);
@@ -169,13 +170,24 @@ public class UIShopifyController : Controller
 			{
 				ClientId = settings?.App?.ClientId,
 				ClientSecret = settings?.App?.ClientSecret,
-				ShopUrl = settings?.ShopUrl
+				ShopUrl = settings?.ShopUrl,
+				ClientCredsConfigured = settings is { App: { ClientId: {}, ClientSecret: {} } },
+				AppDeployed = settings is { DeployedCommit: {} },
+				AppInstalled = settings is { AccessToken: {} },
+				AppName = vm.AppName ?? "BTCPay Server",
+				Step = settings switch
+				{
+					{ App: { ClientId: null, ClientSecret: null } } => ShopifySettingsViewModel.State.WaitingForDeploy,
+					{ DeployedCommit: null } => ShopifySettingsViewModel.State.WaitingForDeploy,
+					{ AccessToken: null } => ShopifySettingsViewModel.State.WaitingForInstall,
+					_ => ShopifySettingsViewModel.State.Done
+				}
 			});
 		}
 	}
 	static AsyncDuplicateLock OrderLocks = new AsyncDuplicateLock();
 	[AllowAnonymous]
-	[HttpGet("~/stores/{storeId}/plugins/shopify/checkout")]
+	[HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
 	public async Task<IActionResult> Checkout(string storeId, string? checkout_token, CancellationToken cancellationToken)
 	{
 		if (checkout_token is null)
@@ -251,7 +263,7 @@ public class UIShopifyController : Controller
 
 	[AllowAnonymous]
 	[IgnoreAntiforgeryToken]
-	[HttpPost("~/stores/{storeId}/plugins/shopify/webhooks")]
+	[HttpPost("~/stores/{storeId}/plugins/shopify-v2/webhooks")]
 	// We actually do not use it, but shopify requires to still listen to it...
 	// leaving it here.
 	public async Task<IActionResult> Webhook(string storeId)

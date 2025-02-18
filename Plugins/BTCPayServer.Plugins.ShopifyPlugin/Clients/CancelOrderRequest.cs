@@ -1,11 +1,10 @@
-﻿using BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
+namespace BTCPayServer.Plugins.ShopifyPlugin.Clients;
 
 public enum OrderCancelReason
 {

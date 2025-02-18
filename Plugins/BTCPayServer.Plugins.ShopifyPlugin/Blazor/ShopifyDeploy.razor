@@ -1,0 +1,133 @@
+﻿@using System.ComponentModel.DataAnnotations
+@using System.IO
+@using System.Text
+@using System.Text.RegularExpressions
+@using BTCPayServer.Configuration
+@using BTCPayServer.Services.Stores
+@inject ShopifyClientFactory ShopifyClientFactory
+@inject StoreRepository StoreRepository
+@inject IJSRuntime JSRuntime
+@code {
+    [Parameter] public string StoreId { get; set; }
+    [Parameter] public string PluginUrl { get; set; }
+
+    bool _Deploying;
+    public class DeployViewModel
+    {
+        [Required]
+        public string AppName { get; set; }
+        [Required]
+        public string CLIToken { get; set; }
+    }
+    DeployViewModel deployViewModel;
+    EditContext editContext;
+    ValidationMessageStore messageStore;
+    
+    private async Task Deploy(EditContext arg)
+    {
+        if (_Deploying)
+            return;
+        _Deploying = true;
+        logs.Clear();
+        logs.AppendLine("Deployment started");
+        FormError = null;
+        StateHasChanged(); 
+        var settings = await StoreRepository.GetSettingAsync<ShopifyStoreSettings>(StoreId, ShopifyStoreSettings.SettingsName);
+        var deployer = this.ShopifyClientFactory.CreateAppDeployer();
+        using var resp = await deployer.Deploy(new()
+        {
+            AppName = deployViewModel.AppName.Trim(),
+            CLIToken = deployViewModel.CLIToken.Trim(),
+            ClientId = settings.App.ClientId,
+            PluginUrl = "https://example.com" //PluginUrl
+        });
+        await using var stream = await resp.Content.ReadAsStreamAsync();
+        string commit = null;
+        bool success = false;
+        using var reader = new StreamReader(stream, leaveOpen: true);
+        while (await reader.ReadLineAsync() is { } line)
+        {
+            if (line.Contains("[2K"))
+                continue;
+            if (line.Contains("Releasing an app version ..."))
+                continue;
+            if (line.StartsWith("COMMIT="))
+            {
+                commit = line.Substring("COMMIT=".Length).Trim();
+            }
+
+            if (line.StartsWith("SUCCESS=true"))
+                success = true;
+            logs.AppendLine(line);
+            StateHasChanged();
+        }
+
+        if (success)
+        {
+            settings.DeployedCommit = commit;
+            await StoreRepository.UpdateSetting(StoreId, ShopifyStoreSettings.SettingsName, settings);
+            await JSRuntime.InvokeVoidAsync("RefreshPage");
+        }
+        else
+        {
+            FormError = "Failure to deploy the shopify app";
+        }
+
+        _Deploying = false;
+        StateHasChanged();
+    }
+
+    public StringBuilder logs = new StringBuilder();
+    protected override void OnInitialized()
+    {
+        deployViewModel = new DeployViewModel() { AppName = "BTCPay Server" };
+        editContext = new EditContext(deployViewModel);
+        editContext.OnValidationRequested += HandleValidationRequested;
+        messageStore = new ValidationMessageStore(editContext);
+    }
+    static Regex InvalidInput = new Regex(@"[\t\r\n\f\v""]");
+    string FormError = "";
+    private void HandleValidationRequested(object sender, ValidationRequestedEventArgs e)
+    {
+        messageStore.Clear();
+        FormError = "";
+        if (deployViewModel.CLIToken?.StartsWith("atkn_") is not true)
+            messageStore.Add(() => deployViewModel.CLIToken, "Invalid CLI token, it should start by atkn_");
+        else if (InvalidInput.IsMatch(deployViewModel.CLIToken ?? ""))
+            messageStore.Add(() => deployViewModel.CLIToken, "Found forbidden characters");
+        if (InvalidInput.IsMatch(deployViewModel.AppName ?? ""))
+            messageStore.Add(() => deployViewModel.AppName, "Found forbidden characters");
+        try
+        {
+            ShopifyClientFactory.CreateAppDeployer();
+        }
+        catch (ConfigException ce)
+        {
+            FormError = ce.Message;
+        }
+    }
+}
+<EditForm OnValidSubmit="Deploy" EditContext="@editContext">
+    <DataAnnotationsValidator />
+    @if (!String.IsNullOrEmpty((FormError)))
+    {
+        <div class="alert alert-danger text-break" role="alert">@FormError</div>
+    }
+    <p text-translate="true">ADD INSTRUCTIONS TO GET THE CLI TOKEN IN PARTNER PORTAL SETTINGS</p>
+    <div class="form-group">
+        <label for="deployViewModel.AppName" class="form-label">App name</label>
+        <InputText @bind-Value="deployViewModel.AppName" Class="form-control"/>
+        <ValidationMessage For="() => deployViewModel.AppName" Class="text-danger"></ValidationMessage>
+    </div>
+    <div class="form-group">
+        <label for="deployViewModel.CLIToken" class="form-label">CLI token</label>
+        <InputText @bind-Value="deployViewModel.CLIToken" Class="form-control"/>
+        <ValidationMessage For="() => deployViewModel.CLIToken" Class="text-danger"></ValidationMessage>
+    </div>
+
+    @if (logs.Length != 0)
+    {
+        <pre><code class="text hljs" id="deployLogs">@logs</code></pre>
+    }
+    <button class="btn btn-primary" type="submit" >Deploy App</button>
+</EditForm>

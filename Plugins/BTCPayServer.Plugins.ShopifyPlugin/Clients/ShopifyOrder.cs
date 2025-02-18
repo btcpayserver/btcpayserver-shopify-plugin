@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
-namespace BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models;
+namespace BTCPayServer.Plugins.ShopifyPlugin.Clients;
 
 public record ShopifyId(string Type, long Id)
 {

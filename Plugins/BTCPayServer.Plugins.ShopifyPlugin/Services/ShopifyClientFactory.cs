@@ -1,4 +1,5 @@
 ﻿#nullable enable
+using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Services.Stores;
 using System;
 using System.Collections.Generic;
@@ -6,19 +7,33 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using BTCPayServer.Configuration;
+using Microsoft.Extensions.Configuration;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin.Services
 {
     public class ShopifyClientFactory
     {
-		public ShopifyClientFactory(IHttpClientFactory httpClientFactory, StoreRepository storeRepository)
+	    public IConfiguration Configuration { get; set; }
+		public ShopifyClientFactory(IHttpClientFactory httpClientFactory, StoreRepository storeRepository, IConfiguration configuration)
 		{
 			HttpClientFactory = httpClientFactory;
 			StoreRepository = storeRepository;
+			Configuration = configuration;
 		}
 
 		public IHttpClientFactory HttpClientFactory { get; }
 		public StoreRepository StoreRepository { get; }
+
+		public AppDeployerClient CreateAppDeployer()
+		{
+			var deployerUrl = Configuration["SHOPIFY_PLUGIN_DEPLOYER"];
+			if (string.IsNullOrEmpty(deployerUrl))
+				throw new ConfigException("BTCPAY_SHOPIFY_PLUGIN_DEPLOYER is not configured");
+			if (!Uri.TryCreate(deployerUrl, UriKind.Absolute, out var deployerUri))
+				throw new ConfigException("BTCPAY_SHOPIFY_PLUGIN_DEPLOYER should be a valid URL");
+			return new AppDeployerClient(this.HttpClientFactory.CreateClient("SHOPIFY_DEPLOYER"), deployerUri);
+		}
 
 		public async Task<ShopifyApiClient?> CreateAPIClient(string storeId)
         {

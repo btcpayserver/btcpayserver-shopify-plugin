@@ -1,8 +1,7 @@
 
 
-using BTCPayServer.Plugins.ShopifyPlugin.Services;
+using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
-using BTCPayServer.Plugins.ShopifyPlugin.ViewModels.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json.Linq;
@@ -81,7 +80,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Tests
 			{
 				OrderId = o.Id,
 				NotifyCustomer = false,
-				Reason = ViewModels.OrderCancelReason.DECLINED,
+				Reason = OrderCancelReason.DECLINED,
 				Refund = false,
 				Restock = true,
 				StaffNote = "lol"
@@ -102,7 +101,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Tests
 				throw new InvalidOperationException("Please, set your dev environment with: dotnet user-secrets set \"API_CLIENT\" \"YOUR_API_CLIENT\"");
 			if (conf["API_SECRET"] is not string apiSecret)
 				throw new InvalidOperationException("Please, set your dev environment with: dotnet user-secrets set \"API_SECRET\" \"YOUR_API_SECRET\"");
-			return new ShopifyAppClient(new HttpClient(), new ShopifyAppCredentials("c2f52d0d9f040c8de2e92d978ac706a8", "f4110cea690d160b789f1b541a5ef4ce"));
+			return new ShopifyAppClient(new HttpClient(), new ShopifyAppCredentials(apiClient, apiSecret));
 		}
 
 		private static IConfigurationRoot GetConf()
