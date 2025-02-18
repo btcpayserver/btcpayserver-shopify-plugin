@@ -7,91 +7,112 @@
 @inject ShopifyClientFactory ShopifyClientFactory
 @inject StoreRepository StoreRepository
 @inject IJSRuntime JSRuntime
+
 @code {
     [Parameter] public string StoreId { get; set; }
     [Parameter] public string PluginUrl { get; set; }
 
-    bool _Deploying;
     public class DeployViewModel
     {
-        [Required]
-        public string AppName { get; set; }
-        [Required]
-        public string CLIToken { get; set; }
+        [Required] public string AppName { get; set; }
+        [Required] public string CLIToken { get; set; }
     }
+
     DeployViewModel deployViewModel;
     EditContext editContext;
     ValidationMessageStore messageStore;
-    
+
     private async Task Deploy(EditContext arg)
     {
-        if (_Deploying)
+        if (!_CanDeploy)
             return;
-        _Deploying = true;
-        logs.Clear();
-        logs.AppendLine("Deployment started");
-        FormError = null;
-        StateHasChanged();
-        var settings = await StoreRepository.GetSettingAsync<ShopifyStoreSettings>(StoreId, ShopifyStoreSettings.SettingsName);
-        var deployer = this.ShopifyClientFactory.CreateAppDeployer();
-        using var resp = await deployer.Deploy(new()
+        try
         {
-            AppName = deployViewModel.AppName.Trim(),
-            CLIToken = deployViewModel.CLIToken.Trim(),
-            ClientId = settings.App.ClientId,
-            PluginUrl = PluginUrl
-        });
-        await using var stream = await resp.Content.ReadAsStreamAsync();
-        string commit = null;
-        bool success = false;
-        using var reader = new StreamReader(stream, leaveOpen: true);
-        while (await reader.ReadLineAsync() is { } line)
-        {
-            if (line.Contains("[2K"))
-                continue;
-            if (line.Contains("Releasing an app version ..."))
-                continue;
-            if (line.StartsWith("COMMIT="))
+            _CanDeploy = false;
+            logs.Clear();
+            logs.AppendLine("Deployment started");
+            FormError = null;
+            StateHasChanged();
+            var settings = await StoreRepository.GetSettingAsync<ShopifyStoreSettings>(StoreId, ShopifyStoreSettings.SettingsName);
+            var deployer = this.ShopifyClientFactory.CreateAppDeployer();
+            using var resp = await deployer.Deploy(new()
             {
-                commit = line.Substring("COMMIT=".Length).Trim();
+                AppName = deployViewModel.AppName.Trim(),
+                CLIToken = deployViewModel.CLIToken.Trim(),
+                ClientId = settings.App.ClientId,
+                PluginUrl = PluginUrl
+            });
+            await using var stream = await resp.Content.ReadAsStreamAsync();
+            string commit = null;
+            bool success = false;
+            using var reader = new StreamReader(stream, leaveOpen: true);
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                if (line.Contains("[2K"))
+                    continue;
+                if (line.Contains("Releasing an app version ..."))
+                    continue;
+                if (line.StartsWith("COMMIT="))
+                {
+                    commit = line.Substring("COMMIT=".Length).Trim();
+                }
+
+                if (line.StartsWith("SUCCESS=true"))
+                    success = true;
+                logs.AppendLine(line);
+                StateHasChanged();
             }
 
-            if (line.StartsWith("SUCCESS=true"))
-                success = true;
-            logs.AppendLine(line);
+            if (success)
+            {
+                settings.DeployedCommit = commit;
+                await StoreRepository.UpdateSetting(StoreId, ShopifyStoreSettings.SettingsName, settings);
+                await JSRuntime.InvokeVoidAsync("RefreshPage");
+            }
+            else
+            {
+                FormError = "Failure to deploy the shopify app";
+            }
+
             StateHasChanged();
         }
-
-        if (success)
+        finally
         {
-            settings.DeployedCommit = commit;
-            await StoreRepository.UpdateSetting(StoreId, ShopifyStoreSettings.SettingsName, settings);
-            await JSRuntime.InvokeVoidAsync("RefreshPage");
+            _CanDeploy = true;
         }
-        else
-        {
-            FormError = "Failure to deploy the shopify app";
-        }
-
-        _Deploying = false;
-        StateHasChanged();
     }
 
     public StringBuilder logs = new StringBuilder();
+
     protected override void OnInitialized()
     {
         deployViewModel = new DeployViewModel() { AppName = "BTCPay Server" };
         editContext = new EditContext(deployViewModel);
         editContext.OnValidationRequested += HandleValidationRequested;
         messageStore = new ValidationMessageStore(editContext);
-        IsValidPluginUrl = !BTCPayServer.Extensions.IsLocalNetwork(new Uri(PluginUrl, UriKind.Absolute).Host);
-        if (!IsValidPluginUrl)
+        _CanDeploy = true;
+        var localNetwork = BTCPayServer.Extensions.IsLocalNetwork(new Uri(PluginUrl, UriKind.Absolute).Host);
+        if (localNetwork)
+        {
+            _CanDeploy = false;
             FormError = "You can't deploy a shopify app with a local domain. Please use a public domain.";
+        }
+
+        try
+        {
+            this.ShopifyClientFactory.CreateAppDeployer();
+        }
+        catch (ConfigException e)
+        {
+            _CanDeploy = false;
+            FormError = e.Message;
+        }
     }
 
-    bool IsValidPluginUrl = false;
+    bool _CanDeploy = false;
     static Regex InvalidInput = new Regex(@"[\t\r\n\f\v""]");
     string FormError = "";
+
     private void HandleValidationRequested(object sender, ValidationRequestedEventArgs e)
     {
         messageStore.Clear();
@@ -102,23 +123,19 @@
             messageStore.Add(() => deployViewModel.CLIToken, "Found forbidden characters");
         if (InvalidInput.IsMatch(deployViewModel.AppName ?? ""))
             messageStore.Add(() => deployViewModel.AppName, "Found forbidden characters");
-        try
-        {
-            ShopifyClientFactory.CreateAppDeployer();
-        }
-        catch (ConfigException ce)
-        {
-            FormError = ce.Message;
-        }
     }
+
 }
+
 <EditForm OnValidSubmit="Deploy" EditContext="@editContext">
-    <DataAnnotationsValidator />
+    <DataAnnotationsValidator/>
     @if (!String.IsNullOrEmpty((FormError)))
     {
         <div class="alert alert-danger text-break" role="alert">@FormError</div>
     }
-    <p>Go to the <a href="https://partners.shopify.com/" rel="noreferrer noopener">Shopify Partner portal</a>, Settings => Scroll down => CLI Token => Manage Tokens => Generate new token, then copy the token. We are are not storing this token, so feel free to revoke it after deployment.</p>
+    <p>Go to the <a href="https://partners.shopify.com/" rel="noreferrer noopener">Shopify Partner portal</a>, Settings
+        => Scroll down => CLI Token => Manage Tokens => Generate new token, then copy the token. We are are not storing
+        this token, so feel free to revoke it after deployment.</p>
     <div class="form-group">
         <label for="deployViewModel.AppName" class="form-label">App name</label>
         <InputText @bind-Value="deployViewModel.AppName" Class="form-control"/>
@@ -126,7 +143,7 @@
     </div>
     <div class="form-group">
         <label for="deployViewModel.CLIToken" class="form-label">CLI token</label>
-        <InputText @bind-Value="deployViewModel.CLIToken" Class="form-control"/>
+        <InputText @bind-Value="deployViewModel.CLIToken" autocomplete="off" Class="form-control"/>
         <ValidationMessage For="() => deployViewModel.CLIToken" Class="text-danger"></ValidationMessage>
     </div>
 
@@ -134,5 +151,5 @@
     {
         <pre><code class="text hljs" id="deployLogs">@logs</code></pre>
     }
-    <button class="btn btn-primary" type="submit" disabled="@(!IsValidPluginUrl)">Deploy App</button>
+    <button class="btn btn-primary" type="submit" disabled="@(!_CanDeploy)">Deploy App</button>
 </EditForm>
