@@ -11,7 +11,7 @@ git clone --recurse-submodules https://github.com/btcpayserver/btcpayserver-shop
 Then create the `appsettings.dev.json` file in `submodules\btcpayserver\BTCPayServer`, with the following content:
 ```json
 {
-  "DEBUG_PLUGINS": "..\\..\\..\\Plugins\\BTCPayServer.Plugins.ShopifyPlugin\\bin\\Debug\\net8.0\\BTCPayServer.Plugins.ShopifyPlugin.dll",
+  "DEBUG_PLUGINS": "../../../Plugins/BTCPayServer.Plugins.ShopifyPlugin/bin/Debug/net8.0/BTCPayServer.Plugins.ShopifyPlugin.dll",
   "SHOPIFY_PLUGIN_DEPLOYER": "http://localhost:32204/"
 }
 ```
