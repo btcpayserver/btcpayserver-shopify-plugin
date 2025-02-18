@@ -26,7 +26,9 @@ CLOUDFLARE_TUNNEL_TOKEN="<token>"
 ```
 
 To get the `token`, follow [this documentation](https://github.com/btcpayserver/btcpayserver-docker/blob/master/docs/cloudflare-tunnel.md).
-In the `Edit public hostname` part, `Service` should be `https://host.docker.internal:14142`.
+
+1. In the `Edit public hostname` part, `Service` should be `https://host.docker.internal:14142`.
+2. Disable TLS check: `Additional application settings` => `TLS` => Check `No TLS Verify`. 
 
 Finally, start the development dependencies via docker-compose:
 
