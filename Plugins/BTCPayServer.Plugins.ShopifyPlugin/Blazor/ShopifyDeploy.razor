@@ -39,7 +39,7 @@
             AppName = deployViewModel.AppName.Trim(),
             CLIToken = deployViewModel.CLIToken.Trim(),
             ClientId = settings.App.ClientId,
-            PluginUrl = "https://example.com" //PluginUrl
+            PluginUrl = PluginUrl
         });
         await using var stream = await resp.Content.ReadAsStreamAsync();
         string commit = null;
