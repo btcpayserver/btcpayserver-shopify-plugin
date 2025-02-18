@@ -67,6 +67,8 @@
             {
                 settings.DeployedCommit = commit;
                 await StoreRepository.UpdateSetting(StoreId, ShopifyStoreSettings.SettingsName, settings);
+                // Add a small delay to let the time for the user to see it is a success before refreshing the page
+                await Task.Delay(2000);
                 await JSRuntime.InvokeVoidAsync("RefreshPage");
             }
             else
