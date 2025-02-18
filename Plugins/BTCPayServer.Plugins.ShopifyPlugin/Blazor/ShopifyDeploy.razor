@@ -31,7 +31,7 @@
         logs.Clear();
         logs.AppendLine("Deployment started");
         FormError = null;
-        StateHasChanged(); 
+        StateHasChanged();
         var settings = await StoreRepository.GetSettingAsync<ShopifyStoreSettings>(StoreId, ShopifyStoreSettings.SettingsName);
         var deployer = this.ShopifyClientFactory.CreateAppDeployer();
         using var resp = await deployer.Deploy(new()
@@ -84,7 +84,12 @@
         editContext = new EditContext(deployViewModel);
         editContext.OnValidationRequested += HandleValidationRequested;
         messageStore = new ValidationMessageStore(editContext);
+        IsValidPluginUrl = !BTCPayServer.Extensions.IsLocalNetwork(new Uri(PluginUrl, UriKind.Absolute).Host);
+        if (!IsValidPluginUrl)
+            FormError = "You can't deploy a shopify app with a local domain. Please use a public domain.";
     }
+
+    bool IsValidPluginUrl = false;
     static Regex InvalidInput = new Regex(@"[\t\r\n\f\v""]");
     string FormError = "";
     private void HandleValidationRequested(object sender, ValidationRequestedEventArgs e)
@@ -113,7 +118,7 @@
     {
         <div class="alert alert-danger text-break" role="alert">@FormError</div>
     }
-    <p text-translate="true">ADD INSTRUCTIONS TO GET THE CLI TOKEN IN PARTNER PORTAL SETTINGS</p>
+    <p>Go to the <a href="https://partners.shopify.com/" rel="noreferrer noopener">Shopify Partner portal</a>, Settings => Scroll down => CLI Token => Manage Tokens => Generate new token, then copy the token. We are are not storing this token, so feel free to revoke it after deployment.</p>
     <div class="form-group">
         <label for="deployViewModel.AppName" class="form-label">App name</label>
         <InputText @bind-Value="deployViewModel.AppName" Class="form-control"/>
@@ -129,5 +134,5 @@
     {
         <pre><code class="text hljs" id="deployLogs">@logs</code></pre>
     }
-    <button class="btn btn-primary" type="submit" >Deploy App</button>
+    <button class="btn btn-primary" type="submit" disabled="@(!IsValidPluginUrl)">Deploy App</button>
 </EditForm>

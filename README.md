@@ -12,12 +12,23 @@ Then create the `appsettings.dev.json` file in `submodules\btcpayserver\BTCPaySe
 ```json
 {
   "DEBUG_PLUGINS": "..\\..\\..\\Plugins\\BTCPayServer.Plugins.ShopifyPlugin\\bin\\Debug\\net8.0\\BTCPayServer.Plugins.ShopifyPlugin.dll",
+  "SHOPIFY_PLUGIN_DEPLOYER": "http://localhost:32204/"
 }
 ```
 
 This will ensure that BTCPay Server loads the plugin when it starts.
 
-Then start the development dependencies via docker-compose:
+Next, Shopify requires a public domain in order to integrate with it. The `docker-compose` contains [cloudflared] for this purpose.
+
+Create a `.env` file at the root of the project, with the following content:
+```bash
+CLOUDFLARE_TUNNEL_TOKEN="<token>"
+```
+
+To get the `token`, follow [this documentation](https://github.com/btcpayserver/btcpayserver-docker/blob/master/docs/cloudflare-tunnel.md).
+In the `Edit public hostname` part, `Service` should be `https://host.docker.internal:14142`.
+
+Finally, start the development dependencies via docker-compose:
 
 ```
 docker-compose up -d dev
@@ -37,3 +48,5 @@ Note: Running or compiling the BTCPay Server project will not automatically reco
 We recommend using Rider for plugin development, as it supports hot reload with plugins. You can edit .cshtml files, save, and refresh the page to see the changes.
 
 Visual Studio does not support this feature.
+
+

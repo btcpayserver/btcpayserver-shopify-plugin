@@ -61,7 +61,7 @@
                 </h2>
                 <div id="collapseOne" class="accordion-collapse collapse @(expandClientApp ? "show" : "")" aria-labelledby="headingOne" data-bs-parent="#accordionExample">
                     <div class="accordion-body">
-                        <p text-translate="true">ADD INSTRUCTION TO CREATE APP MANUALLY IN PARTNER PORTAL</p>
+                        <p>Go to the <a href="https://partners.shopify.com/" rel="noreferrer noopener">Shopify Partner portal</a>, Apps => Create App => Create app manually => Create. Then copy and paste the Client ID and the Client secret.</p>
 
                         <form method="post">
                             <div class="form-group">
@@ -135,7 +135,7 @@
                     <div class="accordion-body">
                         @if (Model.AppInstalled)
                         {
-                            <span>You already installed this app on your Shopify store</span>
+                            <span>You installed this app on your Shopify store. Do not forget to <a href="@Model.ShopCheckoutSettingsUrl" rel="noreferrer noopener" target="_blank">customize your store</a> by adding the UI Extension to the "Thank you" page.</span>
                         }
                         else if (!Model.AppDeployed)
                         {
@@ -143,7 +143,7 @@
                         }
                         else
                         {
-                            <span>ADD INSTRUCTION TO INSTALL THE APP TO SHOPIFY STORE</span>
+                            <span>Install your app by going to the <a href="https://partners.shopify.com/" rel="noreferrer noopener">Shopify Partner portal</a>, then click on the app => Distribution => Custom distribution.</span>
                         }
                     </div>
                 </div>

@@ -174,6 +174,7 @@ public class UIShopifyV2Controller : Controller
 				ClientId = settings?.App?.ClientId,
 				ClientSecret = settings?.App?.ClientSecret,
 				ShopUrl = settings?.ShopUrl,
+				ShopCheckoutSettingsUrl = GetCheckoutSettings(settings?.ShopUrl),
 				ClientCredsConfigured = settings is { App: { ClientId: {}, ClientSecret: {} } },
 				AppDeployed = settings is { DeployedCommit: {} },
 				AppInstalled = settings is { AccessToken: {} },
@@ -187,6 +188,15 @@ public class UIShopifyV2Controller : Controller
 				}
 			});
 		}
+	}
+
+	private string? GetCheckoutSettings(string? settingsShopUrl)
+	{
+		settingsShopUrl ??= string.Empty;
+		var shopName = settingsShopUrl.Split('.').FirstOrDefault()?.Replace("https://","");
+		if (shopName is null)
+			return null;
+		return $"https://admin.shopify.com/store/{shopName}/settings/checkout";
 	}
 
 	static AsyncDuplicateLock OrderLocks = new AsyncDuplicateLock();
