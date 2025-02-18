@@ -5,3 +5,4 @@ Plugins/packed
 .vs/
 monero_wallet/
 .env
+*.DotSettings.user
