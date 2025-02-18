@@ -25,5 +25,5 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.ViewModels
 		public string AppName { get; set; }
 		public string CLIToken { get; set; }
 		public string ShopUrl { get; set; }
-	}
+    }
 }

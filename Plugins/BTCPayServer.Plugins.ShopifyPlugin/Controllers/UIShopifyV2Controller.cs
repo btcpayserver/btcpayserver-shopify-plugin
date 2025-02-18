@@ -34,6 +34,7 @@ using System.Globalization;
 using BTCPayServer.Lightning.LndHub;
 using System.Threading;
 using BTCPayServer.Configuration;
+using BTCPayServer.Filters;
 using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
 using Microsoft.Extensions.Configuration;
@@ -67,15 +68,14 @@ public class UIShopifyV2Controller : Controller
 
 	[AllowAnonymous]
 	[HttpGet("~/stores/{storeId}/plugins/shopify-v2")]
+	[XFrameOptions(XFrameOptionsAttribute.XFrameOptions.Unset)]
 	public async Task<IActionResult> Index(string storeId, string? id_token = null)
 	{
 		if (id_token is not null)
 		{	
 			var appClient = await ShopifyClientFactory.CreateAppClient(storeId);
-			if (appClient is null)
-				return NotFound();
-			if (!appClient.ValidateQueryString(this.HttpContext.Request.QueryString.ToString()))
-				return NotFound();
+			if (appClient is null || !appClient.ValidateQueryString(this.HttpContext.Request.QueryString.ToString()))
+				return ShopifyAdminView();;
 			var t = appClient.ValidateSessionToken(id_token);
 			var accessToken = await appClient.GetAccessToken(t.ShopUrl, id_token);
 			var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName) ?? new ShopifyStoreSettings(); // Should not be null as we have appClient
@@ -114,9 +114,12 @@ public class UIShopifyV2Controller : Controller
 					}
 				}
 			}
+			return ShopifyAdminView();
 		}
 		return RedirectToAction(nameof(Settings), new { storeId });
 	}
+
+	private ViewResult ShopifyAdminView() => View("/Views/UIShopify/ShopifyAdmin.cshtml");
 
 	[Route("~/stores/{storeId}/plugins/shopify-v2/settings")]
 	[Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie, Policy = Policies.CanModifyStoreSettings)]
@@ -177,7 +180,7 @@ public class UIShopifyV2Controller : Controller
 				AppName = vm.AppName ?? "BTCPay Server",
 				Step = settings switch
 				{
-					{ App: { ClientId: null, ClientSecret: null } } => ShopifySettingsViewModel.State.WaitingForDeploy,
+					null or { App: null } or { App: { ClientId: null, ClientSecret: null } } => ShopifySettingsViewModel.State.WaitingClientCreds,
 					{ DeployedCommit: null } => ShopifySettingsViewModel.State.WaitingForDeploy,
 					{ AccessToken: null } => ShopifySettingsViewModel.State.WaitingForInstall,
 					_ => ShopifySettingsViewModel.State.Done
@@ -185,6 +188,7 @@ public class UIShopifyV2Controller : Controller
 			});
 		}
 	}
+
 	static AsyncDuplicateLock OrderLocks = new AsyncDuplicateLock();
 	[AllowAnonymous]
 	[HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]

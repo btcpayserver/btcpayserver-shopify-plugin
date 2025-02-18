@@ -4,3 +4,4 @@
 Plugins/packed
 .vs/
 monero_wallet/
+.env

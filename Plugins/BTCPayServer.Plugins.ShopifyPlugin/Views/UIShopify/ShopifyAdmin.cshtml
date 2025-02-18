@@ -1,0 +1,17 @@
+@using BTCPayServer.Abstractions.Extensions
+@using BTCPayServer.Abstractions.TagHelpers
+@using BTCPayServer.Plugins.ShopifyPlugin
+@using BTCPayServer.Plugins.ShopifyPlugin.ViewModels
+@using BTCPayServer.TagHelpers
+@using Microsoft.AspNetCore.Mvc.TagHelpers
+@using Microsoft.AspNetCore.Routing
+@model ShopifySettingsViewModel
+@{
+    var storeId = (string)this.Context.GetRouteValue("storeId");
+    var url = this.Url.ActionAbsolute(Context.Request, nameof(UIShopifyV2Controller.Settings), new { storeId = storeId }).AbsoluteUri;
+    Layout = "_LayoutWizard";
+}
+<header class="text-center">
+    <h1>Shopify Plugin for BTCPay Server</h1>
+    <p class="lead text-secondary mt-3">Please, <a href="@url" target="_blank">click here</a> to go to the plugin's page</p>
+</header>

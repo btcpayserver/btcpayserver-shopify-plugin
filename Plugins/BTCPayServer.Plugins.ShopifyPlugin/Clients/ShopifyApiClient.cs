@@ -109,12 +109,12 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			if (!skipLifeTimeCheck && DateTimeOffset.UtcNow - date > TimeSpan.FromHours(1.0))
 				return false;
 			query.Remove("hmac");
-            queryString = queryString.Replace($"hmac={hmac}", "").Replace("&&", "&");
+            queryString = queryString.Substring(1).Replace($"hmac={hmac}", "").Replace("&&", "&");
 			var keyBytes = Encoding.UTF8.GetBytes(_credentials.ClientSecret);
 			using (var hmacObj = new HMACSHA256(keyBytes))
 			{
 				var hashBytes = hmacObj.ComputeHash(Encoding.UTF8.GetBytes(queryString));
-				var hashString = BitConverter.ToString(hashBytes).Replace("-","");
+				var hashString = BitConverter.ToString(hashBytes).Replace("-","").ToLowerInvariant();
 				if (!hashString.Equals(hmac, StringComparison.OrdinalIgnoreCase))
 					return false;
 			}

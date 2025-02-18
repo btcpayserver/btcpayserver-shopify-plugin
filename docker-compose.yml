@@ -13,7 +13,16 @@ services:
       - nbxplorer
       - postgres
       - shopify-app-deployer
-        
+      - cloudflared
+
+  cloudflared:
+    container_name: 'cloudflared-tunnel'
+    image: btcpayserver/cloudflared:2023.10.0
+    command: 'tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?Create a local .env file with CLOUDFLARE_TUNNEL_TOKEN=<token>, to get the <token> follow this documentation https://github.com/btcpayserver/btcpayserver-docker/blob/master/docs/cloudflare-tunnel.md}'
+    restart: 'on-failure'
+    environment:
+      REAL_IP_HEADER: Cf-Connecting-Ip
+
   shopify-app-deployer:
     image: btcpayserver/shopify-app:1.0
     restart: unless-stopped
