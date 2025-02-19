@@ -27,9 +27,6 @@ using StoreData = BTCPayServer.Data.StoreData;
 using BTCPayServer.Services;
 using BTCPayServer.Abstractions.Models;
 using System.Text.RegularExpressions;
-using static Dapper.SqlMapper;
-using BTCPayServer.Plugins.Shopify.Models;
-using NBitpayClient;
 using System.Globalization;
 using BTCPayServer.Lightning.LndHub;
 using System.Threading;
@@ -74,25 +71,71 @@ public class UIShopifyV2Controller : Controller
 		if (id_token is not null)
 		{	
 			var appClient = await ShopifyClientFactory.CreateAppClient(storeId);
-			if (appClient is null || !appClient.ValidateQueryString(this.HttpContext.Request.QueryString.ToString()))
-				return ShopifyAdminView();;
-			var t = appClient.ValidateSessionToken(id_token);
-			var accessToken = await appClient.GetAccessToken(t.ShopUrl, id_token);
+			if (appClient is null)
+			{
+				this.TempData.SetStatusMessageModel(new StatusMessageModel()
+				{
+					Message = "The Shopify plugin's ClientId or ClientSecret isn't configured",
+					Severity = StatusMessageModel.StatusSeverity.Error
+				});
+				return ShopifyAdminView();
+			}
+
+			if (!appClient.ValidateQueryString(this.HttpContext.Request.QueryString.ToString()))
+			{
+				this.TempData.SetStatusMessageModel(new StatusMessageModel()
+				{
+					Message = "The Shopify plugin's couldn't validate the query string. The ClientSecret might be incorrect. Reset the setup and start the app installation again.",
+					Severity = StatusMessageModel.StatusSeverity.Error
+				});
+				return ShopifyAdminView();
+			}
+
+			(string ShopUrl, string Issuer) t;
+			try
+			{
+				t = appClient.ValidateSessionToken(id_token);
+			}
+			catch (Exception e)
+			{
+				this.TempData.SetStatusMessageModel(new StatusMessageModel()
+				{
+					Message = "Failure to validate the session token: " + e.Message,
+					Severity = StatusMessageModel.StatusSeverity.Error
+				});
+				return ShopifyAdminView();
+			}
+
+			AccessTokenResponse accessToken;
+			try
+			{
+				accessToken = await appClient.GetAccessToken(t.ShopUrl, id_token);
+			}
+			catch (Exception e)
+			{
+				this.TempData.SetStatusMessageModel(new StatusMessageModel()
+				{
+					Message = "Failure to get the access token from shopify: " + e.Message,
+					Severity = StatusMessageModel.StatusSeverity.Error
+				});
+				return ShopifyAdminView();
+			}
 			var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName) ?? new ShopifyStoreSettings(); // Should not be null as we have appClient
-			if (settings.ShopUrl is null || settings.AccessToken is null)
+			if (settings.Setup?.ShopUrl is null || settings.Setup?.AccessToken is null)
 			{
 				this.TempData.SetStatusMessageModel(new StatusMessageModel()
 				{
 					Message = "Shopify plugin successfully configured",
 					Severity = StatusMessageModel.StatusSeverity.Success
 				});
-				settings.ShopUrl = t.ShopUrl;
-				settings.AccessToken = accessToken.AccessToken;
+				settings.Setup ??= new ();
+				settings.Setup.ShopUrl = t.ShopUrl;
+				settings.Setup.AccessToken = accessToken.AccessToken;
 				await _storeRepo.UpdateSetting(storeId, ShopifyStoreSettings.SettingsName, settings);
 			}
 			else
 			{
-				if (settings.ShopUrl != t.ShopUrl)
+				if (settings.Setup?.ShopUrl != t.ShopUrl)
 				{
 					this.TempData.SetStatusMessageModel(new StatusMessageModel()
 					{
@@ -107,9 +150,10 @@ public class UIShopifyV2Controller : Controller
 						Message = "The Shopify plugin is already configured",
 						Severity = StatusMessageModel.StatusSeverity.Success
 					});
-					if (settings.AccessToken != accessToken.AccessToken)
+					if (settings.Setup?.AccessToken != accessToken.AccessToken)
 					{
-						settings.AccessToken = accessToken.AccessToken;
+						settings.Setup ??= new ();
+						settings.Setup.AccessToken = accessToken.AccessToken;
 						await _storeRepo.UpdateSetting(storeId, ShopifyStoreSettings.SettingsName, settings);
 					}
 				}
@@ -126,6 +170,7 @@ public class UIShopifyV2Controller : Controller
 	public async Task<IActionResult> Settings(string storeId,
 			ShopifySettingsViewModel vm, [FromForm] string? command = null)
 	{
+		var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName) ?? new();
 		if (command == "SaveAppCredentials")
 		{
 			vm.ClientId ??= "";
@@ -142,8 +187,7 @@ public class UIShopifyV2Controller : Controller
 			}
 			if (!ModelState.IsValid)
 				return View("/Views/UIShopify/Settings.cshtml", vm);
-			var settings = new ShopifyStoreSettings();
-			settings.App = new ShopifyStoreSettings.AppCreds
+			settings.Setup = new()
 			{
 				ClientId = vm.ClientId,
 				ClientSecret = vm.ClientSecret
@@ -158,7 +202,8 @@ public class UIShopifyV2Controller : Controller
 		}
 		if (command == "Reset")
 		{
-			await _storeRepo.UpdateSetting<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName, null!);
+			settings.Setup = null;
+			await _storeRepo.UpdateSetting<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName, settings);
 			this.TempData.SetStatusMessageModel(new StatusMessageModel()
 			{
 				Message = "App settings reset",
@@ -168,22 +213,21 @@ public class UIShopifyV2Controller : Controller
 		}
 		else // (command is null)
 		{
-			var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName);
 			return View("/Views/UIShopify/Settings.cshtml", new ShopifySettingsViewModel()
 			{
-				ClientId = settings?.App?.ClientId,
-				ClientSecret = settings?.App?.ClientSecret,
-				ShopUrl = settings?.ShopUrl,
-				ShopCheckoutSettingsUrl = GetCheckoutSettings(settings?.ShopUrl),
-				ClientCredsConfigured = settings is { App: { ClientId: {}, ClientSecret: {} } },
-				AppDeployed = settings is { DeployedCommit: {} },
-				AppInstalled = settings is { AccessToken: {} },
-				AppName = vm.AppName ?? "BTCPay Server",
+				ClientId = settings.Setup?.ClientId,
+				ClientSecret = settings.Setup?.ClientSecret,
+				ShopUrl = settings.Setup?.ShopUrl,
+				ShopCheckoutSettingsUrl = GetCheckoutSettings(settings.Setup?.ShopUrl),
+				ClientCredsConfigured = settings.Setup is { ClientId: {}, ClientSecret: {} },
+				AppDeployed = settings.Setup is { DeployedCommit: {} },
+				AppInstalled = settings.Setup is { AccessToken: {} },
+				AppName = settings.PreferredAppName ?? ShopifyStoreSettings.DefaultAppName,
 				Step = settings switch
 				{
-					null or { App: null } or { App: { ClientId: null, ClientSecret: null } } => ShopifySettingsViewModel.State.WaitingClientCreds,
-					{ DeployedCommit: null } => ShopifySettingsViewModel.State.WaitingForDeploy,
-					{ AccessToken: null } => ShopifySettingsViewModel.State.WaitingForInstall,
+					{ Setup: null } or { Setup: { ClientId: null, ClientSecret: null } } => ShopifySettingsViewModel.State.WaitingClientCreds,
+					{ Setup: { DeployedCommit: null } } => ShopifySettingsViewModel.State.WaitingForDeploy,
+					{ Setup: { AccessToken: null } } => ShopifySettingsViewModel.State.WaitingForInstall,
 					_ => ShopifySettingsViewModel.State.Done
 				}
 			});

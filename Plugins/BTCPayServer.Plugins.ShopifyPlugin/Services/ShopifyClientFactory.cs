@@ -51,14 +51,14 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Services
 		public async Task<ShopifyApiClient?> CreateAPIClient(string storeId)
         {
 			var settings = await GetSettings(storeId);
-			if (settings is { ShopUrl: string shopUrl, AccessToken: string accessToken })
+			if (settings?.Setup is { ShopUrl: string shopUrl, AccessToken: string accessToken })
 				return new ShopifyApiClient(HttpClientFactory.CreateClient("SHOPIFY_API_CLIENT"), shopUrl, new ShopifyApiClientCredentials.AccessToken(accessToken));
 			return null;
 		}
 		public async Task<ShopifyAppClient?> CreateAppClient(string storeId)
 		{
 			var settings = await GetSettings(storeId);
-			if (settings is { App: { ClientId: string id, ClientSecret: string secret } })
+			if (settings?.Setup is { ClientId: string id, ClientSecret: string secret })
 				return new ShopifyAppClient(HttpClientFactory.CreateClient("SHOPIFY_APP_CLIENT"), new ShopifyAppCredentials(id, secret));
 			return null;
 		}

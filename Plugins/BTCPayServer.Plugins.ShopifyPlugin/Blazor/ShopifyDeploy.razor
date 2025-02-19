@@ -11,6 +11,7 @@
 @code {
     [Parameter] public string StoreId { get; set; }
     [Parameter] public string PluginUrl { get; set; }
+    [Parameter] public string AppName { get; set; }
 
     public class DeployViewModel
     {
@@ -28,18 +29,28 @@
             return;
         try
         {
+            var settings = await StoreRepository.GetSettingAsync<ShopifyStoreSettings>(StoreId, ShopifyStoreSettings.SettingsName) ?? new();
+            if (settings.PreferredAppName != deployViewModel.AppName.Trim())
+            {
+                settings.PreferredAppName = deployViewModel.AppName.Trim();
+                await StoreRepository.UpdateSetting(StoreId, ShopifyStoreSettings.SettingsName, settings);
+            }
+            if (settings is not { Setup: { ClientId: { } clientId } setup })
+            {
+                this.FormError = "Shopify store not configured";
+                return;
+            }
             _CanDeploy = false;
             logs.Clear();
             logs.AppendLine("Deployment started");
             FormError = null;
             StateHasChanged();
-            var settings = await StoreRepository.GetSettingAsync<ShopifyStoreSettings>(StoreId, ShopifyStoreSettings.SettingsName);
             var deployer = this.ShopifyClientFactory.CreateAppDeployer();
             using var resp = await deployer.Deploy(new()
             {
-                AppName = deployViewModel.AppName.Trim(),
+                AppName = settings.PreferredAppName ?? ShopifyStoreSettings.DefaultAppName,
                 CLIToken = deployViewModel.CLIToken.Trim(),
-                ClientId = settings.App.ClientId,
+                ClientId = clientId,
                 PluginUrl = PluginUrl
             });
             await using var stream = await resp.Content.ReadAsStreamAsync();
@@ -65,7 +76,7 @@
 
             if (success)
             {
-                settings.DeployedCommit = commit;
+                setup.DeployedCommit = commit;
                 await StoreRepository.UpdateSetting(StoreId, ShopifyStoreSettings.SettingsName, settings);
                 // Add a small delay to let the time for the user to see it is a success before refreshing the page
                 await Task.Delay(2000);
@@ -88,7 +99,8 @@
 
     protected override void OnInitialized()
     {
-        deployViewModel = new DeployViewModel() { AppName = "BTCPay Server" };
+        this.
+        deployViewModel = new DeployViewModel() { AppName = AppName };
         editContext = new EditContext(deployViewModel);
         editContext.OnValidationRequested += HandleValidationRequested;
         messageStore = new ValidationMessageStore(editContext);
