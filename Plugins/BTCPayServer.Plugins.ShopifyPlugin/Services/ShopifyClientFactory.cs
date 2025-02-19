@@ -15,11 +15,14 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Services
     public class ShopifyClientFactory
     {
 	    public IConfiguration Configuration { get; set; }
-		public ShopifyClientFactory(IHttpClientFactory httpClientFactory, StoreRepository storeRepository, IConfiguration configuration)
+	    public BTCPayServerOptions Options { get; }
+
+	    public ShopifyClientFactory(IHttpClientFactory httpClientFactory, StoreRepository storeRepository, IConfiguration configuration, BTCPayServerOptions options)
 		{
 			HttpClientFactory = httpClientFactory;
 			StoreRepository = storeRepository;
 			Configuration = configuration;
+			Options = options;
 		}
 
 		public IHttpClientFactory HttpClientFactory { get; }
@@ -29,7 +32,17 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Services
 		{
 			var deployerUrl = Configuration["SHOPIFY_PLUGIN_DEPLOYER"];
 			if (string.IsNullOrEmpty(deployerUrl))
-				throw new ConfigException("BTCPAY_SHOPIFY_PLUGIN_DEPLOYER is not configured");
+			{
+				if (Options.DockerDeployment)
+				{
+					throw new ConfigException("You need to install the 'opt-add-shopify' fragment in order to deploy the app to shopify.");
+				}
+				else
+				{
+					throw new ConfigException("BTCPAY_SHOPIFY_PLUGIN_DEPLOYER is not configured");
+				}
+			}
+
 			if (!Uri.TryCreate(deployerUrl, UriKind.Absolute, out var deployerUri))
 				throw new ConfigException("BTCPAY_SHOPIFY_PLUGIN_DEPLOYER should be a valid URL");
 			return new AppDeployerClient(this.HttpClientFactory.CreateClient("SHOPIFY_DEPLOYER"), deployerUri);
