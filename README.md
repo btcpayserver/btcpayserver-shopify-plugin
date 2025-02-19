@@ -42,7 +42,9 @@ Finally, start the development dependencies via docker-compose:
 docker-compose up -d dev
 ```
 
-Finally, set up BTCPay Server as the startup project in [Rider](https://www.jetbrains.com/rider/) or Visual Studio.
+Finally:
+1. Set up BTCPay Server as the startup project in [Rider](https://www.jetbrains.com/rider/) or Visual Studio.
+2. Make sure to select the `Bitcoin-HTTPS` launch settings.
 
 If you want to reset the environment you can run:
 
