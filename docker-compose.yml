@@ -17,7 +17,7 @@ services:
 
   cloudflared:
     container_name: 'cloudflared-tunnel'
-    image: btcpayserver/cloudflared:2024.8.2-2
+    image: btcpayserver/cloudflared:2024.8.2-3
     command: 'tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?Create a local .env file with CLOUDFLARE_TUNNEL_TOKEN=<token>, to get the <token> follow this documentation https://github.com/btcpayserver/btcpayserver-docker/blob/master/docs/cloudflare-tunnel.md}'
     restart: 'on-failure'
     environment:
