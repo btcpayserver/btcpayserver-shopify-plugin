@@ -203,6 +203,9 @@ public class UIShopifyV2Controller : Controller
 		if (command == "Reset")
 		{
 			settings.Setup = null;
+			// We do not reset `settings.PreferredAppName` on purpose.
+			// The name is just cosmetic, the user who resets probably just want to setup again
+			// the same app.
 			await _storeRepo.UpdateSetting<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName, settings);
 			this.TempData.SetStatusMessageModel(new StatusMessageModel()
 			{

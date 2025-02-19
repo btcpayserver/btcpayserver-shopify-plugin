@@ -19,6 +19,9 @@ namespace BTCPayServer.Plugins.ShopifyPlugin
 	    public string? ClientSecret { get; set; }
 	    public string? ShopUrl { get; set; }
 	    public string? AccessToken { get; set; }
+	    /// <summary>
+	    /// Useful to notify users if they need to deploy again the app in a future plugin update
+	    /// </summary>
 	    public int Version { get; set; }
 	    public string? DeployedCommit { get; set; }
     }
