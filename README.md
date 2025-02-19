@@ -1,5 +1,11 @@
 # Shopify plugin
 
+## Configuration
+
+| Environment variable               | Description                             | Example                |
+|------------------------------------|-----------------------------------------|------------------------|
+| **BTCPAY_SHOPIFY_PLUGIN_DEPLOYER** | The URL of the [shopify-app-deployer](https://github.com/btcpayserver/shopify-app) | http://localhost:5000/ |
+
 ## For maintainers
 
 If you are a developer maintaining this plugin, in order to maintain this plugin, you need to clone this repository with ``--recurse-submodules``:
