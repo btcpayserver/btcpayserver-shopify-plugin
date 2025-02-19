@@ -26,7 +26,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   shopify-app-deployer:
-    image: btcpayserver/shopify-app-deployer:1.0
+    image: btcpayserver/shopify-app-deployer:1.1
     restart: unless-stopped
     init: true
     expose:
