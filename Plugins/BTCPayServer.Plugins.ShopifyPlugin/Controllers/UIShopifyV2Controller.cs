@@ -1,8 +1,6 @@
 #nullable enable
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using BTCPayServer.Data;
-using Microsoft.AspNetCore.Identity;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using BTCPayServer.Abstractions.Extensions;
@@ -11,26 +9,21 @@ using Microsoft.AspNetCore.Authorization;
 using BTCPayServer.Controllers;
 using BTCPayServer.Client;
 using BTCPayServer.Abstractions.Constants;
-using Microsoft.Extensions.Logging;
 using BTCPayServer.Services.Stores;
 using BTCPayServer.Services.Invoices;
 using System.Collections.Generic;
 using BTCPayServer.Plugins.ShopifyPlugin.Services;
-using System.Net.Http;
 using BTCPayServer.Client.Models;
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json;
 using Microsoft.Extensions.Primitives;
 using System.IO;
 using System.Text;
 using StoreData = BTCPayServer.Data.StoreData;
-using BTCPayServer.Services;
 using BTCPayServer.Abstractions.Models;
 using System.Text.RegularExpressions;
 using System.Globalization;
 using BTCPayServer.Lightning.LndHub;
 using System.Threading;
-using BTCPayServer.Configuration;
 using BTCPayServer.Filters;
 using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
@@ -163,7 +156,45 @@ public class UIShopifyV2Controller : Controller
 		return RedirectToAction(nameof(Settings), new { storeId });
 	}
 
-	private ViewResult ShopifyAdminView() => View("/Views/UIShopify/ShopifyAdmin.cshtml");
+
+    [AllowAnonymous]
+    [HttpGet("~/stores/{storeId}/plugins/shopify-v2/validate-payment")]
+    public async Task<IActionResult> ValidatePayment(string storeId, string? checkout_token, CancellationToken cancellationToken)
+    {
+        if (checkout_token is null)
+            return BadRequest("Invalid checkout token");
+        var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
+        if (client is null)
+            return BadRequest("Shopify plugin isn't configured properly");
+        var order = await client.GetOrderByCheckoutToken(checkout_token);
+        var store = await _storeRepo.FindStore(storeId);
+        if (order is null || store is null)
+            return BadRequest("Invalid checkout token");
+
+        var orderId = order.Id.Id;
+        var searchTerm = $"{Extensions.SHOPIFY_ORDER_ID_PREFIX}{orderId}";
+        var invoices = await _invoiceRepository.GetInvoices(new InvoiceQuery()
+        {
+            TextSearch = searchTerm,
+            StoreId = new[] { storeId }
+        });
+        var orderInvoices = invoices.Where(e => e.GetShopifyOrderId() == orderId).ToArray();
+
+        var settledInvoice =
+            orderInvoices.LastOrDefault(entity =>
+                new[] { "settled", "processing", "confirmed", "paid", "complete" }
+                    .Contains(
+                        entity.GetInvoiceState().Status.ToString().ToLower()));
+
+        return Ok(new
+        {
+            IsInvoiceSettled = settledInvoice != null,
+            InvoiceId = settledInvoice?.Id
+        });
+    }
+
+
+    private ViewResult ShopifyAdminView() => View("/Views/UIShopify/ShopifyAdmin.cshtml");
 
 	[Route("~/stores/{storeId}/plugins/shopify-v2/settings")]
 	[Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie, Policy = Policies.CanModifyStoreSettings)]
@@ -251,6 +282,7 @@ public class UIShopifyV2Controller : Controller
 	[HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
 	public async Task<IActionResult> Checkout(string storeId, string? checkout_token, CancellationToken cancellationToken)
 	{
+		Console.WriteLine(checkout_token);
 		if (checkout_token is null)
 			return BadRequest("Invalid checkout token");
 		var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);

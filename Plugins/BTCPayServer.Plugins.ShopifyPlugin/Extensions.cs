@@ -1,12 +1,6 @@
-﻿using BTCPayServer.Plugins.ShopifyPlugin.Services;
-using BTCPayServer.Services.Invoices;
-using MailKit.Search;
-using System;
-using System.Collections.Generic;
+﻿using BTCPayServer.Services.Invoices;
 using System.Globalization;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin
 {
