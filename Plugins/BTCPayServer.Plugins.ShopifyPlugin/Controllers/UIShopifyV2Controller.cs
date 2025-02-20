@@ -157,43 +157,6 @@ public class UIShopifyV2Controller : Controller
 	}
 
 
-    [AllowAnonymous]
-    [HttpGet("~/stores/{storeId}/plugins/shopify-v2/validate-payment")]
-    public async Task<IActionResult> ValidatePayment(string storeId, string? checkout_token, CancellationToken cancellationToken)
-    {
-        if (checkout_token is null)
-            return BadRequest("Invalid checkout token");
-        var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
-        if (client is null)
-            return BadRequest("Shopify plugin isn't configured properly");
-        var order = await client.GetOrderByCheckoutToken(checkout_token);
-        var store = await _storeRepo.FindStore(storeId);
-        if (order is null || store is null)
-            return BadRequest("Invalid checkout token");
-
-        var orderId = order.Id.Id;
-        var searchTerm = $"{Extensions.SHOPIFY_ORDER_ID_PREFIX}{orderId}";
-        var invoices = await _invoiceRepository.GetInvoices(new InvoiceQuery()
-        {
-            TextSearch = searchTerm,
-            StoreId = new[] { storeId }
-        });
-        var orderInvoices = invoices.Where(e => e.GetShopifyOrderId() == orderId).ToArray();
-
-        var settledInvoice =
-            orderInvoices.LastOrDefault(entity =>
-                new[] { "settled", "processing", "confirmed", "paid", "complete" }
-                    .Contains(
-                        entity.GetInvoiceState().Status.ToString().ToLower()));
-
-        return Ok(new
-        {
-            IsInvoiceSettled = settledInvoice != null,
-            InvoiceId = settledInvoice?.Id
-        });
-    }
-
-
     private ViewResult ShopifyAdminView() => View("/Views/UIShopify/ShopifyAdmin.cshtml");
 
 	[Route("~/stores/{storeId}/plugins/shopify-v2/settings")]
