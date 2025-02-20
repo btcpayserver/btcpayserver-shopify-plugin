@@ -248,6 +248,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			"""
             id
             name
+            statusPageUrl
             totalOutstandingSet {
                 shopMoney {
                 amount,

@@ -294,6 +294,10 @@ public class UIShopifyV2Controller : Controller
 						order.Name,
 						orderId.ToString(CultureInfo.InvariantCulture),
 						searchTerm
+					},
+					Checkout = new()
+					{
+						RedirectURL = order.StatusPageUrl
 					}
 				}, store,
 				Request.GetAbsoluteRoot(), new List<string>() { searchTerm });

@@ -48,6 +48,7 @@ public class OrderTransaction
 }
 public class ShopifyOrder
 {
+	public string StatusPageUrl { get; set; }
 	public ShopifyId Id { get; set; }
 	public string Name { get; set; }
 	public ShopifyMoneyBag TotalOutstandingSet { get; set; }
