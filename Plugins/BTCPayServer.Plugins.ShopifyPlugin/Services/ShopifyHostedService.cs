@@ -160,7 +160,7 @@ public class ShopifyHostedService : EventHostedServiceBase
             {
                 parent_id = parentId.Id,
                 currency = invoice.Currency,
-                amount = invoice.PaidAmount.Net.ToString(CultureInfo.InvariantCulture),
+                amount = invoice.Price.ToString(CultureInfo.InvariantCulture),
                 kind = kind,
                 gateway = "BTCPayServer",
                 source = "external",
