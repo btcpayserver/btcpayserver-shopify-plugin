@@ -10,9 +10,11 @@
     var storeId = (string)this.Context.GetRouteValue("storeId");
     var pluginUrl = this.Url.ActionAbsolute(Context.Request, nameof(Index), new { storeId = storeId }).AbsoluteUri;
 
+    bool allStepsCompleted = Model.Step == ShopifySettingsViewModel.State.Done;
     bool expandClientApp = Model.Step == ShopifySettingsViewModel.State.WaitingClientCreds;
     bool expandDeploy = Model.Step == ShopifySettingsViewModel.State.WaitingForDeploy;
-    bool expandInstall = Model.Step == ShopifySettingsViewModel.State.WaitingForInstall || Model.Step == ShopifySettingsViewModel.State.Done;
+    bool expandInstall = !allStepsCompleted && Model.Step == ShopifySettingsViewModel.State.WaitingForInstall;
+
 }
 @section PageHeadContent {
     <link rel="stylesheet" href="~/vendor/highlightjs/default.min.css" asp-append-version="true">
@@ -134,17 +136,20 @@
                 </h2>
                 <div id="collapseThree" class="accordion-collapse collapse @(expandInstall ? "show" : "")" aria-labelledby="headingThree" data-bs-parent="#accordionExample">
                     <div class="accordion-body">
-                        @if (Model.AppInstalled)
+                        @if (!Model.AppDeployed)
+                        {
+                            <span>You need to complete the previous step first.</span>
+                        }
+                        else if (Model.AppInstalled)
                         {
                             <span>You installed this app on your Shopify store. Do not forget to <a href="@Model.ShopCheckoutSettingsUrl" rel="noreferrer noopener" target="_blank">customize your store</a> by adding the UI Extension to the "Thank you" page.</span>
                         }
-                        else if (!Model.AppDeployed)
-                        {
-                            <span>You need to complete the previous step first</span>
-                        }
                         else
                         {
-                            <span>Install your app by going to the <a href="https://partners.shopify.com/" rel="noreferrer noopener">Shopify Partner portal</a>, then click on the app => Distribution => Custom distribution.</span>
+                            <div>
+                                <p>Install your app by going to the <a href="https://partners.shopify.com/" rel="noreferrer noopener">Shopify Partner portal</a>, then click on the app => Distribution => Custom distribution.</p>
+                                <p>After installation, <a href="@Model.ShopCheckoutSettingsUrl" rel="noreferrer noopener" target="_blank">customize your store</a> by adding the UI Extension to the "Thank you" page. See documentation for further guidance.</p>
+                            </div>
                         }
                     </div>
                 </div>

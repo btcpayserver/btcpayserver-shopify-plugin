@@ -282,7 +282,6 @@ public class UIShopifyV2Controller : Controller
 	[HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
 	public async Task<IActionResult> Checkout(string storeId, string? checkout_token, CancellationToken cancellationToken)
 	{
-		Console.WriteLine(checkout_token);
 		if (checkout_token is null)
 			return BadRequest("Invalid checkout token");
 		var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
