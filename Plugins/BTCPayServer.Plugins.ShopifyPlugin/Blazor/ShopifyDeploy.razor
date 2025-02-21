@@ -56,7 +56,7 @@
             await using var stream = await resp.Content.ReadAsStreamAsync();
             string commit = null;
             bool success = false;
-            int version = 0;
+            string version = "";
             using var reader = new StreamReader(stream, leaveOpen: true);
             while (await reader.ReadLineAsync() is { } line)
             {
@@ -66,8 +66,8 @@
                     continue;
                 if (line.StartsWith("COMMIT="))
                     commit = line.Substring("COMMIT=".Length).Trim();
-                if (line.StartsWith("VERSION=") && int.TryParse(line.Substring("VERSION=".Length).Trim(), out var v))
-                    version = v;
+                if (line.StartsWith("VERSION="))
+                    version = line.Substring("VERSION=".Length).Trim();
 
                 if (line.StartsWith("SUCCESS=true"))
                     success = true;
