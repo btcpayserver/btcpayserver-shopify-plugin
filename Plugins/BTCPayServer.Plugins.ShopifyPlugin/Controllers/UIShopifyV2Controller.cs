@@ -278,8 +278,8 @@ public class UIShopifyV2Controller : Controller
 		if (currentInvoice != null)
 			return RedirectToInvoiceCheckout(currentInvoice.Id);
 
-		var isCapturable = order.Transactions.Any(t => t.IsManuallyCapturableSale());
-		if (!isCapturable)
+		var baseTx = order.Transactions.FirstOrDefault(t => t.IsManuallyCapturableSale());
+		if (baseTx is null)
 			return BadRequest("The shopify order is not capturable");
 		var amount = order.TotalOutstandingSet.PresentmentMoney;
 		var invoice = await _invoiceController.CreateInvoiceCoreRaw(
@@ -292,7 +292,7 @@ public class UIShopifyV2Controller : Controller
 						["orderId"] = order.Name,
 						["shopifyOrderId"] = orderId,
 						["shopifyOrderName"] = order.Name,
-						["gateway"] = order.
+						["gateway"] = baseTx.Gateway
 					},
 					AdditionalSearchTerms = new[]
 					{
