@@ -256,7 +256,7 @@ public class UIShopifyV2Controller : Controller
 		var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
 		if (client is null)
 			return BadRequest("Shopify plugin isn't configured properly");
-		var order = await client.GetOrderByCheckoutToken(checkout_token);
+		var order = await client.GetOrderByCheckoutToken(checkout_token, true);
 		var store = await _storeRepo.FindStore(storeId);
 		if (order is null || store is null)
 			return BadRequest("Invalid checkout token");
@@ -277,6 +277,10 @@ public class UIShopifyV2Controller : Controller
 		var currentInvoice =  orderInvoices.FirstOrDefault();
 		if (currentInvoice != null)
 			return RedirectToInvoiceCheckout(currentInvoice.Id);
+
+		var isCapturable = order.Transactions.Any(t => t.IsManuallyCapturableSale());
+		if (!isCapturable)
+			return BadRequest("The shopify order is not capturable");
 		var amount = order.TotalOutstandingSet.PresentmentMoney;
 		var invoice = await _invoiceController.CreateInvoiceCoreRaw(
 				new CreateInvoiceRequest()
@@ -287,7 +291,8 @@ public class UIShopifyV2Controller : Controller
 					{
 						["orderId"] = order.Name,
 						["shopifyOrderId"] = orderId,
-						["shopifyOrderName"] = order.Name
+						["shopifyOrderName"] = order.Name,
+						["gateway"] = order.
 					},
 					AdditionalSearchTerms = new[]
 					{
