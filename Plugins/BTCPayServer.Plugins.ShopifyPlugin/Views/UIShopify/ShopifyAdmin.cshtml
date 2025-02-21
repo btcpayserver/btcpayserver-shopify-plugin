@@ -5,16 +5,27 @@
 @using BTCPayServer.TagHelpers
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @using Microsoft.AspNetCore.Routing
-@model ShopifySettingsViewModel
+@model ShopifyAdminViewModel
 @{
-    var storeId = (string)this.Context.GetRouteValue("storeId");
-    var url = this.Url.ActionAbsolute(Context.Request, nameof(UIShopifyV2Controller.Settings), new { storeId = storeId }).AbsoluteUri;
     Layout = "_LayoutWizard";
 }
+
 <header class="text-center">
     <h1>Shopify Plugin for BTCPay Server</h1>
-    <p class="lead text-secondary mt-3"> Your BTCPay Server-Shopify installation was successful! </p>
-    <p class="mt-3">
-        <span>To start accepting payments, make sure to customize your store by adding the UI Extension to the "Thank You" page. Follow the <a href="https://docs.btcpayserver.org/ShopifyV2/" rel="noreferrer noopener" target="_blank">documentation</a> on how to go about this</span>
-    </p>
+    @if (Model.Configured)
+    {
+        <p class="lead text-secondary mt-3">Your BTCPay Server-Shopify installation was successful!</p>
+        <p class="mt-3">
+            <span>To start accepting payments, make sure to complete the two following steps:</span>
+            <ul class="list-unstyled">
+                <li><a href="https://docs.btcpayserver.org/ShopifyV2/" rel="noreferrer noopener" target="_blank">Customize the checkout's "Thank You" page</a> on <a href="https://admin.shopify.com/store/@(Model.ShopName)/settings/checkout" rel="noreferrer noopener" target="_blank">this page</a>.</li>
+                <li><a href="https://docs.btcpayserver.org/ShopifyV2/" rel="noreferrer noopener" target="_blank">Add BTCPay Server as a Manual payment method</a> on <a href="https://admin.shopify.com/store/@(Model.ShopName)/settings/payments" rel="noreferrer noopener" target="_blank">this page</a>.</li>
+            </ul>
+        </p>
+    }
+    else
+    {
+        <p class="lead text-secondary mt-3">Your BTCPay Server Shopify plugin isn't yet configured.</p>
+    }
+    <p>You can navigate to your plugin's settings page by <a asp-controller="UIShopifyV2" asp-action="Settings" asp-route-storeId="@(this.Context.GetRouteValue("storeId"))" rel="noreferrer noopener" target="_blank">clicking here</a>.</p>
 </header>

@@ -113,6 +113,8 @@ public class UIShopifyV2Controller : Controller
 				});
 				return ShopifyAdminView();
 			}
+
+			var vm = new ShopifyAdminViewModel() { ShopName = GetShopName(t.ShopUrl) };
 			var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName) ?? new ShopifyStoreSettings(); // Should not be null as we have appClient
 			if (settings.Setup?.ShopUrl is null || settings.Setup?.AccessToken is null)
 			{
@@ -124,6 +126,7 @@ public class UIShopifyV2Controller : Controller
 				settings.Setup ??= new ();
 				settings.Setup.ShopUrl = t.ShopUrl;
 				settings.Setup.AccessToken = accessToken.AccessToken;
+				vm.Configured = true;
 				await _storeRepo.UpdateSetting(storeId, ShopifyStoreSettings.SettingsName, settings);
 			}
 			else
@@ -143,6 +146,7 @@ public class UIShopifyV2Controller : Controller
 						Message = "The Shopify plugin is already configured",
 						Severity = StatusMessageModel.StatusSeverity.Success
 					});
+					vm.Configured = true;
 					if (settings.Setup?.AccessToken != accessToken.AccessToken)
 					{
 						settings.Setup ??= new ();
@@ -151,13 +155,14 @@ public class UIShopifyV2Controller : Controller
 					}
 				}
 			}
-			return ShopifyAdminView();
+			return ShopifyAdminView(vm);
 		}
 		return RedirectToAction(nameof(Settings), new { storeId });
 	}
 
+	private string? GetShopName(string? shopUrl) => shopUrl?.Split('.').FirstOrDefault()?.Replace("https://", "");
 
-    private ViewResult ShopifyAdminView() => View("/Views/UIShopify/ShopifyAdmin.cshtml");
+	private ViewResult ShopifyAdminView(ShopifyAdminViewModel? vm = null) => View("/Views/UIShopify/ShopifyAdmin.cshtml", vm ?? new());
 
 	[Route("~/stores/{storeId}/plugins/shopify-v2/settings")]
 	[Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie, Policy = Policies.CanModifyStoreSettings)]
