@@ -19,6 +19,7 @@ using Newtonsoft.Json.Converters;
 using System.Text.RegularExpressions;
 using System.Security;
 using Microsoft.AspNetCore.WebUtilities;
+using JArray = Newtonsoft.Json.Linq.JArray;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 {
@@ -212,17 +213,6 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
                 .Select(token => token["handle"].Value<string>()).ToArray();
         }
 
-        public async Task<TransactionsCreateResp> TransactionCreate(long orderId, TransactionsCreateReq txnCreate)
-        {
-            var postJson = JsonConvert.SerializeObject(txnCreate);
-
-            var req = CreateRequest(HttpMethod.Post, $"orders/{orderId}/transactions.json");
-            req.Content = new StringContent(postJson, Encoding.UTF8, "application/json");
-
-            var strResp = await SendRequest(req);
-            return JsonConvert.DeserializeObject<TransactionsCreateResp>(strResp);
-        }
-
         public async Task<ShopifyOrder> GetOrderByCheckoutToken(string checkoutToken, bool withTransactions = false)
         {
             var req = """
@@ -230,12 +220,12 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
                 orders(first: 1, query: $query) {
                     edges {
                       node {
-                      {OrderData}
+                      ...order
                       }
                     }
                   }
                 }
-                """.Replace("{OrderData}", OrderData);
+                """ + "\n" + OrderData;
             var resp = await SendGraphQL(req, new JObject() { ["query"] = $"checkout_token:{checkoutToken}", ["includeTxs"] = withTransactions });
             return resp["data"]["orders"]["edges"] switch
             {
@@ -246,47 +236,58 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 
         const string OrderData =
 			"""
-            id
-            name
-            totalOutstandingSet {
-                shopMoney {
-                amount,
-                currencyCode
-                }
-                presentmentMoney {
-                amount,
-                currencyCode
-                }
-            }
-            transactions @include(if: $includeTxs) {
+            fragment order on Order {
                 id
-                gateway
-                kind
-                authorizationCode
-                status
-                amountSet {
-                presentmentMoney {
-                    amount
-                    currencyCode
-                }
-                shopMoney {
-                    amount
-                    currencyCode
-                }
+                name
+                cancelledAt
+                statusPageUrl
+                totalOutstandingSet {
+                    shopMoney {
+                        amount
+                        currencyCode
+                        }
+                    presentmentMoney {
+                        amount
+                        currencyCode
+                        }
+                    }
+                transactions @include(if: $includeTxs) {
+                    ...orderTransaction
                 }
             }
-            """;
+            """ + "\n" + TransactionData;
+
+        private const string TransactionData =
+	        """
+	        fragment orderTransaction on OrderTransaction {
+	            id
+	            gateway
+	            kind
+	            authorizationCode
+	            status
+	            manuallyCapturable
+	            amountSet {
+	            presentmentMoney {
+	                amount
+	                currencyCode
+	                }
+	             shopMoney {
+	                 amount
+	                 currencyCode
+	                }
+	            }
+	        }
+	        """;
 		public async Task<ShopifyOrder> GetOrder(long orderId, bool withTransactions = false)
 		{
-
 			// https://shopify.dev/docs/api/admin-graphql/2024-10/queries/order
 			var req = """
             query getOrderDetails($orderId: ID!, $includeTxs: Boolean!) {
               order(id: $orderId) {
-                {OrderData}
+                ...order
               }
             }
-            """.Replace("{OrderData}", OrderData);
+            """ + "\n" + OrderData;
 
             var resp = await SendGraphQL(req,
 				new JObject()
@@ -294,7 +295,8 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 					["orderId"] = ShopifyId.Order(orderId).ToString(),
 					["includeTxs"] = withTransactions
 				});
-			return resp["data"]["order"].ToObject<ShopifyOrder>(JsonSerializer);
+            var d = Unwrap(resp, "order");
+			return d?.ToObject<ShopifyOrder>(JsonSerializer);
 		}
 
 		private HttpRequestMessage CreateGraphQLRequest(string req, JObject variables = null)
@@ -315,13 +317,13 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
         };
 
         // https://shopify.dev/docs/api/admin-graphql/2024-04/mutations/orderCapture
-        public async Task CaptureOrder(CaptureOrderRequest captureOrder)
+        public async Task<OrderTransaction> CaptureOrder(CaptureOrderRequest captureOrder)
         {
             var req = """
                 mutation M($input: OrderCaptureInput!){
                     orderCapture(input: $input) {
                         transaction {
-                            id
+                            ...orderTransaction
                         }
                         userErrors {
                           field
@@ -329,11 +331,25 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
                         }
                     }
                 }
-                """;
+                """ + "\n" + TransactionData;
 			JObject respObj = await SendGraphQL(req, new JObject() { ["input"] = JObject.FromObject(captureOrder, JsonSerializer) });
-			
+			var d = Unwrap(respObj, "orderCapture");
+			return d["transaction"]?.ToObject<OrderTransaction>(JsonSerializer);
 		}
-		public async Task CancelOrder(CancelOrderRequest cancelOrder)
+
+        private JObject? Unwrap(JObject respObj, string function)
+        {
+	        if (respObj["errors"] is JArray {  Count: > 0 } arr)
+				throw new ShopifyApiException(arr[0]!["message"]!.Value<string>());
+	        var d = respObj["data"]?[function] as JObject;
+	        if (d is null)
+		        return null;
+	        if (d["userErrors"] is JArray {  Count: > 0 } arr1)
+		        throw new ShopifyApiException(arr1[0]!["message"]!.Value<string>());
+	        return d;
+        }
+
+        public async Task CancelOrder(CancelOrderRequest cancelOrder)
 		{
 			string req = """
                   mutation orderCancel($notifyCustomer: Boolean, $orderId: ID!, $reason: OrderCancelReason!, $refund: Boolean!, $restock: Boolean!, $staffNote: String) {

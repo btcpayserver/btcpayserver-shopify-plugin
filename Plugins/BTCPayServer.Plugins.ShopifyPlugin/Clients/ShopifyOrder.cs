@@ -41,6 +41,8 @@ public class OrderTransaction
 {
 	public ShopifyId Id { get; set; }
 	public string Gateway { get; set; }
+	public bool ManuallyCapturable { get; set; }
+	public bool IsManuallyCapturableSale() => this is { Kind: "SALE", ManuallyCapturable: true };
 	public string Kind { get; set; }
 	public string AuthorizationCode { get; set; }
 	public string Status { get; set; }
@@ -48,8 +50,10 @@ public class OrderTransaction
 }
 public class ShopifyOrder
 {
+	public string StatusPageUrl { get; set; }
 	public ShopifyId Id { get; set; }
 	public string Name { get; set; }
+	public DateTimeOffset? CancelledAt { get; set; }
 	public ShopifyMoneyBag TotalOutstandingSet { get; set; }
 	public OrderTransaction[] Transactions { get; set; }
 }

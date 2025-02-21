@@ -48,11 +48,37 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Tests
 			Assert.NotNull(order);
 			Assert.Null(await client.GetOrderByCheckoutToken("lol"));
 		}
+
+		[Fact]
+		public async Task CanQueryOrder2()
+		{
+			ShopifyApiClient client = CreateApiClient();
+			// 9756325314825L
+			// 9756273606921L
+			// 9758178115849L
+			var o = await client.GetOrder(9758441341193L, true);
+			Assert.NotNull(o);
+			await client.CancelOrder(new()
+			{
+				OrderId = o.Id,
+				Refund = true,
+				Restock = true,
+				Reason =  OrderCancelReason.DECLINED
+			});
+			// await client.CaptureOrder(new()
+			// {
+			// 	Amount = 39.0m,
+			// 	Currency = "USD",
+			// 	Id = o.Id,
+			// 	ParentTransactionId = o.Transactions[0].Id
+			// });
+		}
+
 		[Fact]
 		public async Task CanQueryOrder()
 		{
 			ShopifyApiClient client = CreateApiClient();
-			var draftTemplate = 1460965376325L;
+			var draftTemplate = 1203089604873L;
 
 			var newDraft = await client.DuplicateOrder(draftTemplate);
 			var orderId = await client.CompleteDraftOrder(newDraft.Id);
@@ -119,13 +145,21 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Tests
 			// See https://shopify.dev/docs/api/payments-apps/2024-04/mutations/paymentSessionResolve
 
 			// dotnet user-secrets set "ACCESS_TOKEN" "YOU_ACCESS_TOKEN"
+
+			ShopifyApiClientCredentials? creds = null;
 			var conf = GetConf();
-			if (conf["ACCESS_TOKEN"] is not string accessToken)
-				throw new InvalidOperationException("Please, set your dev environment with: dotnet user-secrets set \"ACCESS_TOKEN\" \"YOUR_ACCESS_TOKEN\"");
+			if (conf["ACCESS_TOKEN"] is string accessToken)
+				creds = new ShopifyApiClientCredentials.AccessToken(accessToken);
+			if (creds is null && conf["API_KEY"] is string apiKey && conf["API_SECRET"] is string apiSecret)
+				creds = new ShopifyApiClientCredentials.Basic(apiKey, apiSecret);
+			if (creds is null)
+				throw new InvalidOperationException("Please, set your dev environment with: dotnet user-secrets set \"ACCESS_TOKEN\" \"YOUR_ACCESS_TOKEN\" or use API_KEY and API_SECRET");
+			if (conf["SHOP_URL"] is not string shopUrl)
+				throw new InvalidOperationException("Please, set your dev environment with: dotnet user-secrets set \"SHOP_URL\" \"https://XXXXX.myshopify.com/\"");
 
 			return new ShopifyApiClient(new HttpClient(),
-				"https://anj1bs-pu.myshopify.com/",
-				new ShopifyApiClientCredentials.AccessToken(accessToken));
+				shopUrl,
+				creds);
 		}
 	}
 }
