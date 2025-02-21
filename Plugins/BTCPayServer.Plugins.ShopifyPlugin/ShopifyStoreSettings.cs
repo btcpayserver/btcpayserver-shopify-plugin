@@ -22,7 +22,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin
 	    /// <summary>
 	    /// Useful to notify users if they need to deploy again the app in a future plugin update
 	    /// </summary>
-	    public string Version { get; set; }
+	    public string? Version { get; set; }
 	    public string? DeployedCommit { get; set; }
     }
 }
