@@ -1,8 +1,6 @@
 #nullable enable
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using BTCPayServer.Data;
-using Microsoft.AspNetCore.Identity;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using BTCPayServer.Abstractions.Extensions;
@@ -11,26 +9,21 @@ using Microsoft.AspNetCore.Authorization;
 using BTCPayServer.Controllers;
 using BTCPayServer.Client;
 using BTCPayServer.Abstractions.Constants;
-using Microsoft.Extensions.Logging;
 using BTCPayServer.Services.Stores;
 using BTCPayServer.Services.Invoices;
 using System.Collections.Generic;
 using BTCPayServer.Plugins.ShopifyPlugin.Services;
-using System.Net.Http;
 using BTCPayServer.Client.Models;
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json;
 using Microsoft.Extensions.Primitives;
 using System.IO;
 using System.Text;
 using StoreData = BTCPayServer.Data.StoreData;
-using BTCPayServer.Services;
 using BTCPayServer.Abstractions.Models;
 using System.Text.RegularExpressions;
 using System.Globalization;
 using BTCPayServer.Lightning.LndHub;
 using System.Threading;
-using BTCPayServer.Configuration;
 using BTCPayServer.Filters;
 using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
@@ -120,6 +113,8 @@ public class UIShopifyV2Controller : Controller
 				});
 				return ShopifyAdminView();
 			}
+
+			var vm = new ShopifyAdminViewModel() { ShopName = GetShopName(t.ShopUrl) };
 			var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName) ?? new ShopifyStoreSettings(); // Should not be null as we have appClient
 			if (settings.Setup?.ShopUrl is null || settings.Setup?.AccessToken is null)
 			{
@@ -131,6 +126,7 @@ public class UIShopifyV2Controller : Controller
 				settings.Setup ??= new ();
 				settings.Setup.ShopUrl = t.ShopUrl;
 				settings.Setup.AccessToken = accessToken.AccessToken;
+				vm.Configured = true;
 				await _storeRepo.UpdateSetting(storeId, ShopifyStoreSettings.SettingsName, settings);
 			}
 			else
@@ -150,6 +146,7 @@ public class UIShopifyV2Controller : Controller
 						Message = "The Shopify plugin is already configured",
 						Severity = StatusMessageModel.StatusSeverity.Success
 					});
+					vm.Configured = true;
 					if (settings.Setup?.AccessToken != accessToken.AccessToken)
 					{
 						settings.Setup ??= new ();
@@ -158,12 +155,14 @@ public class UIShopifyV2Controller : Controller
 					}
 				}
 			}
-			return ShopifyAdminView();
+			return ShopifyAdminView(vm);
 		}
 		return RedirectToAction(nameof(Settings), new { storeId });
 	}
 
-	private ViewResult ShopifyAdminView() => View("/Views/UIShopify/ShopifyAdmin.cshtml");
+	private string? GetShopName(string? shopUrl) => shopUrl?.Split('.').FirstOrDefault()?.Replace("https://", "");
+
+	private ViewResult ShopifyAdminView(ShopifyAdminViewModel? vm = null) => View("/Views/UIShopify/ShopifyAdmin.cshtml", vm ?? new());
 
 	[Route("~/stores/{storeId}/plugins/shopify-v2/settings")]
 	[Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie, Policy = Policies.CanModifyStoreSettings)]
