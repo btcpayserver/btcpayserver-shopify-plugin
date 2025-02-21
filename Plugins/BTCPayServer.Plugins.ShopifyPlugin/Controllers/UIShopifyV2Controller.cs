@@ -220,7 +220,7 @@ public class UIShopifyV2Controller : Controller
 				ClientId = settings.Setup?.ClientId,
 				ClientSecret = settings.Setup?.ClientSecret,
 				ShopUrl = settings.Setup?.ShopUrl,
-				ShopCheckoutSettingsUrl = GetCheckoutSettings(settings.Setup?.ShopUrl),
+				ShopName = GetShopName(settings.Setup?.ShopUrl),
 				ClientCredsConfigured = settings.Setup is { ClientId: {}, ClientSecret: {} },
 				AppDeployed = settings.Setup is { DeployedCommit: {} },
 				AppInstalled = settings.Setup is { AccessToken: {} },

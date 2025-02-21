@@ -337,7 +337,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			return d["transaction"]?.ToObject<OrderTransaction>(JsonSerializer);
 		}
 
-        private JObject? Unwrap(JObject respObj, string function)
+        private JObject Unwrap(JObject respObj, string function)
         {
 	        if (respObj["errors"] is JArray {  Count: > 0 } arr)
 				throw new ShopifyApiException(arr[0]!["message"]!.Value<string>());
