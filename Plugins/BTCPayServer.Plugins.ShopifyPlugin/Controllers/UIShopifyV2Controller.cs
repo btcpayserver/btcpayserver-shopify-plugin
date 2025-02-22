@@ -277,7 +277,7 @@ public class UIShopifyV2Controller : Controller
 		if (currentInvoice != null)
 			return RedirectToInvoiceCheckout(currentInvoice.Id);
 
-		var baseTx = order.Transactions.FirstOrDefault(t => t.IsManuallyCapturableSale());
+		var baseTx = order.Transactions.FirstOrDefault(t => t is { Kind: "SALE", ManuallyCapturable: true });
 		if (baseTx is null)
 			return BadRequest("The shopify order is not capturable");
 		var amount = order.TotalOutstandingSet.PresentmentMoney;

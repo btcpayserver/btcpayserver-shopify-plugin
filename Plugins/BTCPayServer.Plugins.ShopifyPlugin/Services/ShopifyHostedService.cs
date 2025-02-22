@@ -89,12 +89,11 @@ public class ShopifyHostedService : EventHostedServiceBase
 		if (await client.GetOrder(shopifyOrderId, true) is not { } order)
 			return logs;
         
-        //if there isn't a record for btcpay payment gateway, abort
-        var baseParentTransaction = order.Transactions.FirstOrDefault(h => h.IsManuallyCapturableSale());
-        if (baseParentTransaction is null)
+        var saleTx = order.Transactions.FirstOrDefault(h => h is { Kind: "SALE" });
+        if (saleTx is null)
             return logs;
         //technically, this exploit should not be possible as we use internal invoice tags to verify that the invoice was created by our controlled, dedicated endpoint.
-        if (!invoice.Currency.Equals(baseParentTransaction.AmountSet.PresentmentMoney.CurrencyCode, StringComparison.OrdinalIgnoreCase))
+        if (!invoice.Currency.Equals(saleTx.AmountSet.PresentmentMoney.CurrencyCode, StringComparison.OrdinalIgnoreCase))
         {
             // because of parent_id present, currency will always be the one from parent transaction
             // malicious attacker could potentially exploit this by creating invoice 
@@ -109,13 +108,13 @@ public class ShopifyHostedService : EventHostedServiceBase
         //of the successful ones, get the ones we registered as a valid payment
         var captures = 
             order.Transactions
-            .Where(h => h is { Kind: "CAPTURE", Status: "SUCCESS"}).ToArray();
+            .Where(h => h is { Kind: "CAPTURE", Status: "SUCCESS" }).ToArray();
         
         
         //of the successful ones, get the ones we registered as a voiding of a previous successful payment
         var refunds = 
             order.Transactions
-                .Where(h => h is { Kind: "REFUND", Status: "SUCCESS"}).ToArray();
+                .Where(h => h is { Kind: "REFUND", Status: "SUCCESS" }).ToArray();
 
         bool canRefund = captures.Length > 0 && captures.Length > refunds.Length;
         if (success)
@@ -135,23 +134,26 @@ public class ShopifyHostedService : EventHostedServiceBase
                 return logs;
             }
 
-            try
+            if (saleTx.ManuallyCapturable)
             {
-                var tx = await client.CaptureOrder(new()
+                try
                 {
-                    Currency = invoice.Currency,
-                    Amount = invoice.Price,
-                    Id = order.Id,
-                    ParentTransactionId = baseParentTransaction.Id
-                });
-                logs.Write(
-                    $"Successfully captured the order on Shopify.",
-                    InvoiceEventData.EventSeverity.Info);
-            }
-            catch (Exception e)
-            {
-                logs.Write($"Failed to capture the Shopify order. {e.Message}",
-                    InvoiceEventData.EventSeverity.Error);
+                    await client.CaptureOrder(new()
+                    {
+                        Currency = invoice.Currency,
+                        Amount = invoice.Price,
+                        Id = order.Id,
+                        ParentTransactionId = saleTx.Id
+                    });
+                    logs.Write(
+                        $"Successfully captured the order on Shopify.",
+                        InvoiceEventData.EventSeverity.Info);
+                }
+                catch (Exception e)
+                {
+                    logs.Write($"Failed to capture the Shopify order. {e.Message}",
+                        InvoiceEventData.EventSeverity.Error);
+                }
             }
         }
         else if(!success && order.CancelledAt is null)

@@ -42,7 +42,6 @@ public class OrderTransaction
 	public ShopifyId Id { get; set; }
 	public string Gateway { get; set; }
 	public bool ManuallyCapturable { get; set; }
-	public bool IsManuallyCapturableSale() => this is { Kind: "SALE", ManuallyCapturable: true };
 	public string Kind { get; set; }
 	public string AuthorizationCode { get; set; }
 	public string Status { get; set; }
