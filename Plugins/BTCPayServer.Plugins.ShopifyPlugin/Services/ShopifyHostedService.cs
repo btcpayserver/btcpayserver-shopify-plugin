@@ -37,50 +37,38 @@ public class ShopifyHostedService : EventHostedServiceBase
 
     protected override async Task ProcessEvent(object evt, CancellationToken cancellationToken)
     {
-        if (evt is InvoiceEvent invoiceEvent && new[]
+        if (evt is InvoiceEvent
             {
-                    InvoiceEvent.MarkedCompleted,
-                    InvoiceEvent.MarkedInvalid,
-                    InvoiceEvent.Expired,
-                    InvoiceEvent.Confirmed,
-                    InvoiceEvent.Completed
-                }.Contains(invoiceEvent.Name))
-        {
-            var invoice = invoiceEvent.Invoice;
-            if (invoice.GetShopifyOrderId() is long shopifyOrderId)
-            {
-                bool? success = invoice.Status switch
+                Name:
+                InvoiceEvent.MarkedCompleted or
+                InvoiceEvent.MarkedInvalid or
+                InvoiceEvent.Expired or
+                InvoiceEvent.Confirmed or
+                InvoiceEvent.FailedToConfirm,
+                Invoice:
                 {
-                    InvoiceStatus.Processing or InvoiceStatus.Settled => true,
-					InvoiceStatus.Invalid or InvoiceStatus.Expired => false,
-                    _ => (bool?)null
-                };
-                if (success.HasValue)
-                    await RegisterTransaction(invoice, shopifyOrderId, success.Value);
+                    Status:
+                    InvoiceStatus.Settled or
+                    InvoiceStatus.Invalid or
+                    InvoiceStatus.Expired
+                } invoice
+            } && invoice.GetShopifyOrderId() is { } shopifyOrderId)
+        {
+            try
+            {
+                var resp = await Process(shopifyOrderId, invoice);
+                await _invoiceRepository.AddInvoiceLogs(invoice.Id, resp);
+            }
+            catch (Exception ex)
+            {
+                Logs.PayServer.LogError(ex,
+                    $"Shopify error while trying to register order transaction. " +
+                    $"Triggered by invoiceId: {invoice.Id}, Shopify orderId: {shopifyOrderId}");
             }
         }
-        await base.ProcessEvent(evt, cancellationToken);
     }
 
-    private async Task RegisterTransaction(InvoiceEntity invoice, long shopifyOrderId, bool success)
-    {
-		try
-		{
-			var resp = await Process(shopifyOrderId, invoice, success);
-			if (resp != null)
-			{
-				await _invoiceRepository.AddInvoiceLogs(invoice.Id, resp);
-			}
-		}
-		catch (Exception ex)
-		{
-			Logs.PayServer.LogError(ex,
-				$"Shopify error while trying to register order transaction. " +
-				$"Triggered by invoiceId: {invoice.Id}, Shopify orderId: {shopifyOrderId}");
-		}
-	}
-
-    public async Task<InvoiceLogs> Process(long shopifyOrderId, InvoiceEntity invoice, bool success)
+    async Task<InvoiceLogs> Process(long shopifyOrderId, InvoiceEntity invoice)
     {
 		var logs = new InvoiceLogs();
 		var client = await shopifyClientFactory.CreateAPIClient(invoice.StoreId);
@@ -89,7 +77,7 @@ public class ShopifyHostedService : EventHostedServiceBase
 		if (await client.GetOrder(shopifyOrderId, true) is not { } order)
 			return logs;
         
-        var saleTx = order.Transactions.FirstOrDefault(h => h is { Kind: "SALE" });
+        var saleTx = order.Transactions.FirstOrDefault(h => h is { Kind: "SALE", Status: "PENDING" });
         if (saleTx is null)
             return logs;
         //technically, this exploit should not be possible as we use internal invoice tags to verify that the invoice was created by our controlled, dedicated endpoint.
@@ -103,12 +91,10 @@ public class ShopifyHostedService : EventHostedServiceBase
             return logs;
         }
 
-        
-
         //of the successful ones, get the ones we registered as a valid payment
         var captures = 
             order.Transactions
-            .Where(h => h is { Kind: "CAPTURE", Status: "SUCCESS" }).ToArray();
+            .Where(h => h is { Kind: "SALE", Status: "SUCCESS" }).ToArray();
         
         
         //of the successful ones, get the ones we registered as a voiding of a previous successful payment
@@ -117,7 +103,7 @@ public class ShopifyHostedService : EventHostedServiceBase
                 .Where(h => h is { Kind: "REFUND", Status: "SUCCESS" }).ToArray();
 
         bool canRefund = captures.Length > 0 && captures.Length > refunds.Length;
-        if (success)
+        if (invoice.Status is InvoiceStatus.Settled)
         {
             if (canRefund)
             {
@@ -156,7 +142,7 @@ public class ShopifyHostedService : EventHostedServiceBase
                 }
             }
         }
-        else if(!success && order.CancelledAt is null)
+        else if(order.CancelledAt is null)
         {
             try
             {
@@ -167,9 +153,9 @@ public class ShopifyHostedService : EventHostedServiceBase
                     Reason = OrderCancelReason.DECLINED,
                     Restock = true,
                     Refund = canRefund,
-                    StaffNote = $"BTCPay Invoice {invoice.Id} expired or invalid"
+                    StaffNote = $"BTCPay Invoice {invoice.Id} is {invoice.Status}"
                 });
-                logs.Write("Shopify order cancelled.", InvoiceEventData.EventSeverity.Warning);
+                logs.Write($"Shopify order cancelled. (Invoice Status: {invoice.Status})", InvoiceEventData.EventSeverity.Warning);
             }
             catch (Exception e)
             {

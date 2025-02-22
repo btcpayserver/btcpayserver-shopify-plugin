@@ -56,7 +56,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Tests
 			// 9756325314825L
 			// 9756273606921L
 			// 9758178115849L
-			var o = await client.GetOrder(9758441341193L, true);
+			var o = await client.GetOrder(9759887556873L, true);
 			Assert.NotNull(o);
 			await client.CancelOrder(new()
 			{
