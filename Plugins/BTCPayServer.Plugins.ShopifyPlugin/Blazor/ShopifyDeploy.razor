@@ -122,9 +122,12 @@
         {
             _CanDeploy = false;
             FormError = e.Message;
+            if (e.Message.Contains("opt-add-shopify"))
+                _NeedAddFragment = true;
         }
     }
 
+    bool _NeedAddFragment = false;
     bool _CanDeploy = false;
     static Regex InvalidInput = new Regex(@"[\t\r\n\f\v""]");
     string FormError = "";
@@ -145,11 +148,15 @@
 
 <EditForm OnValidSubmit="Deploy" EditContext="@editContext">
     <DataAnnotationsValidator/>
-    @if (!String.IsNullOrEmpty((FormError)))
+    @if (_NeedAddFragment)
+    {
+        <div class="alert alert-danger text-break" role="alert">The server admin needs to  <a href="https://docs.btcpayserver.org/ShopifyV2/#deploy-the-shopify-fragment" rel="noreferrer noopener" target="_blank">install the 'opt-add-shopify' fragment</a> in order to deploy the app to shopify.</div>
+    }
+    else if (!String.IsNullOrEmpty((FormError)))
     {
         <div class="alert alert-danger text-break" role="alert">@FormError</div>
     }
-    <p>Go to the <a href="https://partners.shopify.com/" rel="noreferrer noopener">Shopify Partner portal</a>, Settings
+    <p>Go to the <a href="https://partners.shopify.com/" rel="noreferrer noopener" target="_blank">Shopify Partner portal</a>, Settings
         => Scroll down => CLI Token => Manage Tokens => Generate new token, then copy the token. We are are not storing
         this token, so feel free to revoke it after deployment.</p>
     <div class="form-group">
