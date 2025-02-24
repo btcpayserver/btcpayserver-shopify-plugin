@@ -132,7 +132,7 @@
 
     AppDeployerConfigException.Error? _AppDeployerError;
     bool _CanDeploy = false;
-    static Regex InvalidInput = new Regex(@"[\t\r\n\f\v""]");
+    static Regex InvalidInput = new Regex(@"[\|\t\r\n\f\v""]");
     string FormError = "";
 
     private void HandleValidationRequested(object sender, ValidationRequestedEventArgs e)
