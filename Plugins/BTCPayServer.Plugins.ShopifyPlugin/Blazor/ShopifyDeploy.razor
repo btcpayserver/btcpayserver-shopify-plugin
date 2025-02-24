@@ -118,16 +118,19 @@
         {
             this.ShopifyClientFactory.CreateAppDeployer();
         }
+        catch (AppDeployerConfigException e)
+        {
+            _CanDeploy = false;
+            _AppDeployerError = e.Details;
+        }
         catch (ConfigException e)
         {
             _CanDeploy = false;
             FormError = e.Message;
-            if (e.Message.Contains("opt-add-shopify"))
-                _NeedAddFragment = true;
         }
     }
 
-    bool _NeedAddFragment = false;
+    AppDeployerConfigException.Error? _AppDeployerError;
     bool _CanDeploy = false;
     static Regex InvalidInput = new Regex(@"[\t\r\n\f\v""]");
     string FormError = "";
@@ -148,17 +151,19 @@
 
 <EditForm OnValidSubmit="Deploy" EditContext="@editContext">
     <DataAnnotationsValidator/>
-    @if (_NeedAddFragment)
+    @if (_AppDeployerError is AppDeployerConfigException.Error.NeedFragment)
     {
-        <div class="alert alert-danger text-break" role="alert">The server admin needs to  <a href="https://docs.btcpayserver.org/ShopifyV2/#deploy-the-shopify-fragment" rel="noreferrer noopener" target="_blank">install the 'opt-add-shopify' fragment</a> in order to deploy the app to shopify.</div>
+        <div class="alert alert-danger text-break" role="alert">The server admin needs to <a href="https://docs.btcpayserver.org/ShopifyV2/#deploy-the-shopify-fragment" rel="noreferrer noopener" target="_blank">install the 'opt-add-shopify' fragment</a> in order to deploy the app on Shopify.</div>
+    }
+    else if (_AppDeployerError is AppDeployerConfigException.Error.NeedEnvVariable)
+    {
+        <div class="alert alert-danger text-break" role="alert">BTCPAY_SHOPIFY_PLUGIN_DEPLOYER is not configured. It should point to a <a href="https://github.com/btcpayserver/shopify-app" rel="noreferrer noopener" target="_blank">shopify app deployer instance</a>.</div>
     }
     else if (!String.IsNullOrEmpty((FormError)))
     {
         <div class="alert alert-danger text-break" role="alert">@FormError</div>
     }
-    <p>Go to the <a href="https://partners.shopify.com/" rel="noreferrer noopener" target="_blank">Shopify Partner portal</a>, Settings
-        => Scroll down => CLI Token => Manage Tokens => Generate new token, then copy the token. We are are not storing
-        this token, so feel free to revoke it after deployment.</p>
+    <p>Go to the <a href="https://partners.shopify.com/" rel="noreferrer noopener" target="_blank">Shopify Partner portal</a>: Settings → Scroll down → CLI Token → Manage Tokens → Generate new token, then copy the token. We are not storing this token, so feel free to revoke it after deployment. Please refer to <a href="https://docs.btcpayserver.org/ShopifyV2/#set-up-a-shopify-app" rel="noreferrer noopener" target="_blank">our documentation</a> if you experience any issues.</p>
     <div class="form-group">
         <label for="deployViewModel.AppName" class="form-label">App name</label>
         <InputText @bind-Value="deployViewModel.AppName" Class="form-control"/>

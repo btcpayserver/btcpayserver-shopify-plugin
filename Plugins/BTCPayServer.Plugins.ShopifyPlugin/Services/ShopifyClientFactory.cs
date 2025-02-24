@@ -12,6 +12,20 @@ using Microsoft.Extensions.Configuration;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin.Services
 {
+	public class AppDeployerConfigException : ConfigException
+	{
+		public enum Error
+		{
+			NeedFragment,
+			NeedEnvVariable
+		}
+		public AppDeployerConfigException(string message, Error err) : base(message)
+		{
+			Details = err;
+		}
+
+		public Error Details { get; }
+	}
     public class ShopifyClientFactory
     {
 	    public IConfiguration Configuration { get; set; }
@@ -35,12 +49,14 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Services
 			{
 				if (Options.DockerDeployment)
 				{
-					throw new ConfigException("You need to install the 'opt-add-shopify' fragment in order to deploy the app to shopify.");
+					throw new AppDeployerConfigException(
+						"You need to install the 'opt-add-shopify' fragment in order to deploy the app to shopify.",
+						AppDeployerConfigException.Error.NeedFragment);
 				}
-				else
-				{
-					throw new ConfigException("BTCPAY_SHOPIFY_PLUGIN_DEPLOYER is not configured");
-				}
+				throw new AppDeployerConfigException(
+					"BTCPAY_SHOPIFY_PLUGIN_DEPLOYER is not configured",
+					AppDeployerConfigException.Error.NeedEnvVariable
+				);
 			}
 
 			if (!Uri.TryCreate(deployerUrl, UriKind.Absolute, out var deployerUri))
