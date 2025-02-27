@@ -236,15 +236,6 @@ public class UIShopifyV2Controller : Controller
 		}
 	}
 
-	private string? GetCheckoutSettings(string? settingsShopUrl)
-	{
-		settingsShopUrl ??= string.Empty;
-		var shopName = settingsShopUrl.Split('.').FirstOrDefault()?.Replace("https://","");
-		if (shopName is null)
-			return null;
-		return $"https://admin.shopify.com/store/{shopName}/settings/checkout";
-	}
-
 	static AsyncDuplicateLock OrderLocks = new AsyncDuplicateLock();
 	[AllowAnonymous]
 	[HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
@@ -280,6 +271,7 @@ public class UIShopifyV2Controller : Controller
 		var baseTx = order.Transactions.FirstOrDefault(t => t is { Kind: "SALE", ManuallyCapturable: true });
 		if (baseTx is null)
 			return BadRequest("The shopify order is not capturable");
+		var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName);
 		var amount = order.TotalOutstandingSet.PresentmentMoney;
 		var invoice = await _invoiceController.CreateInvoiceCoreRaw(
 				new CreateInvoiceRequest()
@@ -289,23 +281,32 @@ public class UIShopifyV2Controller : Controller
 					Metadata = new JObject
 					{
 						["orderId"] = order.Name,
+						["orderUrl"] = GetOrderUrl(settings?.Setup?.ShopUrl, orderId),
 						["shopifyOrderId"] = orderId,
 						["shopifyOrderName"] = order.Name,
 						["gateway"] = baseTx.Gateway
 					},
-					AdditionalSearchTerms = new[]
-					{
+					AdditionalSearchTerms =
+					[
 						order.Name,
 						orderId.ToString(CultureInfo.InvariantCulture),
 						searchTerm
-					},
+					],
 					Checkout = new()
 					{
 						RedirectURL = order.StatusPageUrl
 					}
 				}, store,
-				Request.GetAbsoluteRoot(), new List<string>() { searchTerm });
+				Request.GetAbsoluteRoot(), [searchTerm], cancellationToken);
 		return RedirectToInvoiceCheckout(invoice.Id);
+	}
+
+	private string? GetOrderUrl(string? shopUrl, long shopifyOrderId)
+	{
+		var shopName = GetShopName(shopUrl);
+		if (shopName is null)
+			return null;
+		return $"https://admin.shopify.com/store/{shopName}/orders/{shopifyOrderId}";
 	}
 
 	private IActionResult RedirectToInvoiceCheckout(string invoiceId)
