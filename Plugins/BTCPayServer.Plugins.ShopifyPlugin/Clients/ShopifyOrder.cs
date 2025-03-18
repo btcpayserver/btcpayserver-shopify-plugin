@@ -55,6 +55,7 @@ public class ShopifyOrder
 	public DateTimeOffset? CancelledAt { get; set; }
 	public ShopifyMoneyBag TotalOutstandingSet { get; set; }
 	public OrderTransaction[] Transactions { get; set; }
+    public string[] PaymentGatewayNames { get; set; }
 }
 public class ShopifyMoneyBag
 {
