@@ -103,7 +103,7 @@ public class ShopifyHostedService : EventHostedServiceBase
                 .Where(h => h is { Kind: "REFUND", Status: "SUCCESS" }).ToArray();
 
         bool canRefund = captures.Length > 0 && captures.Length > refunds.Length;
-        if (invoice.Status is InvoiceStatus.Settled || invoice.ExceptionStatus == InvoiceExceptionStatus.PaidPartial)
+        if (invoice.Status is InvoiceStatus.Settled || (invoice.Status == InvoiceStatus.Expired && invoice.ExceptionStatus == InvoiceExceptionStatus.PaidPartial))
         {
             if (canRefund)
             {
