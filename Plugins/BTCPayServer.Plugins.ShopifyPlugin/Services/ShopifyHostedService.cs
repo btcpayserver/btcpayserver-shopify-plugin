@@ -142,10 +142,6 @@ public class ShopifyHostedService : EventHostedServiceBase
                 }
             }
         }
-        if (invoice.Status == InvoiceStatus.Expired && invoice.ExceptionStatus == InvoiceExceptionStatus.PaidPartial)
-        {
-            // Mark order as paid partial
-        }
         else if(order.CancelledAt is null)
         {
             try
