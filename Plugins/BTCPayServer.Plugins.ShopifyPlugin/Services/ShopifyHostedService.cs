@@ -68,7 +68,7 @@ public class ShopifyHostedService : EventHostedServiceBase
         }
     }
 
-    async Task<InvoiceLogs> Process(long shopifyOrderId, InvoiceEntity invoice)
+    async Task<InvoiceLogs> Process(long shopifyOrderId, InvoiceEntity invoice, bool paidPartial = false)
     {
 		var logs = new InvoiceLogs();
 		var client = await shopifyClientFactory.CreateAPIClient(invoice.StoreId);
@@ -103,7 +103,7 @@ public class ShopifyHostedService : EventHostedServiceBase
                 .Where(h => h is { Kind: "REFUND", Status: "SUCCESS" }).ToArray();
 
         bool canRefund = captures.Length > 0 && captures.Length > refunds.Length;
-        if (invoice.Status is InvoiceStatus.Settled)
+        if (invoice.Status is InvoiceStatus.Settled || invoice.ExceptionStatus == InvoiceExceptionStatus.PaidPartial)
         {
             if (canRefund)
             {
@@ -141,6 +141,10 @@ public class ShopifyHostedService : EventHostedServiceBase
                         InvoiceEventData.EventSeverity.Error);
                 }
             }
+        }
+        if (invoice.Status == InvoiceStatus.Expired && invoice.ExceptionStatus == InvoiceExceptionStatus.PaidPartial)
+        {
+            // Mark order as paid partial
         }
         else if(order.CancelledAt is null)
         {
