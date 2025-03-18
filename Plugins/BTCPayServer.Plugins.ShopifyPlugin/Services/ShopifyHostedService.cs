@@ -68,7 +68,7 @@ public class ShopifyHostedService : EventHostedServiceBase
         }
     }
 
-    async Task<InvoiceLogs> Process(long shopifyOrderId, InvoiceEntity invoice, bool paidPartial = false)
+    async Task<InvoiceLogs> Process(long shopifyOrderId, InvoiceEntity invoice)
     {
 		var logs = new InvoiceLogs();
 		var client = await shopifyClientFactory.CreateAPIClient(invoice.StoreId);
