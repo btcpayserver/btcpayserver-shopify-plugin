@@ -408,8 +408,53 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
                 """;
 			JObject respObj = await SendGraphQL(req, new JObject() { ["id"] = ShopifyId.DraftOrder(orderId).ToString() });
             return ShopifyId.Parse(respObj["data"]["draftOrderDuplicate"]["draftOrder"]["id"].Value<string>());
-		}
-	}
+        }
+
+        // https://shopify.dev/docs/api/admin-graphql/latest/mutations/orderUpdate
+        public async Task<ShopifyId> AddBtcPayCheckoutUrlToOrderMetaData(long orderId, string btcpayCheckoutUrl)
+        {
+            var req = """
+                mutation updateOrderMetafields($input: OrderInput!) {
+                  orderUpdate(input: $input) {
+                    order {
+                      id
+                      metafields(first: 10) {
+                        edges {
+                          node {
+                            id
+                            namespace
+                            key
+                            value
+                          }
+                        }
+                      }
+                    }
+                    userErrors {
+                      message
+                      field
+                    }
+                  }
+                }
+                """;
+            var input = new JObject
+            {
+                ["id"] = ShopifyId.Order(orderId).ToString(),
+                ["metafields"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["namespace"] = "custom",
+                        ["key"] = "btcpay_checkout_url",
+                        ["type"] = "single_line_text_field",
+                        ["value"] = btcpayCheckoutUrl
+                    }
+                }
+            };
+            JObject respObj = await SendGraphQL(req, new JObject { ["input"] = input });
+            return ShopifyId.Parse(respObj["data"]["orderUpdate"]["order"]["id"].Value<string>());
+        }
+
+    }
 
 
     public record ShopifyApiClientCredentials

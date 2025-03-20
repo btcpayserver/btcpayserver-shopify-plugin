@@ -300,7 +300,11 @@ public class UIShopifyV2Controller : Controller
                     }
                 }, store,
                 Request.GetAbsoluteRoot(), [searchTerm], cancellationToken);
-        return string.IsNullOrEmpty(invoice?.Id) ? BadRequest("An error occured while creating invoice") : Ok();
+
+		if (invoice == null) return BadRequest("An error occured while creating invoice");
+
+		await client.AddBtcPayCheckoutUrlToOrderMetaData(orderId, Url.Action("Checkout", "UIShopifyV2", new { storeId, checkout_token }, Request.Scheme));
+        return  Ok();
     }
 
 
