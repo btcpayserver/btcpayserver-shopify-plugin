@@ -129,8 +129,7 @@ public class ShopifyHostedService : EventHostedServiceBase
                 try
                 {
                     decimal amount = invoice.Status == InvoiceStatus.Settled ? invoice.Price : invoice.PaidAmount.Net;
-                    var numberFormat = _currencyNameTable.GetNumberFormatInfo(invoice.Currency);
-                    int decimalPlaces = numberFormat?.CurrencyDecimalDigits ?? 2;
+                    int decimalPlaces = _currencyNameTable.GetNumberFormatInfo(invoice.Currency)?.CurrencyDecimalDigits ?? 2;
 
                     await client.CaptureOrder(new()
                     {
