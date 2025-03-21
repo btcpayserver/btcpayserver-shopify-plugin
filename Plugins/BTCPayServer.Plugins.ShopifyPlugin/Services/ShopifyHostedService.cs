@@ -6,6 +6,7 @@ using BTCPayServer.Logging;
 using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Rates;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
