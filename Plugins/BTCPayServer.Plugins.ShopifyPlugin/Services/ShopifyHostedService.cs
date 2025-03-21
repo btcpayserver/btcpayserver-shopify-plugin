@@ -5,11 +5,7 @@ using BTCPayServer.HostedServices;
 using BTCPayServer.Logging;
 using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Services.Invoices;
-<<<<<<< HEAD
 using BTCPayServer.Services.Rates;
-using Microsoft.EntityFrameworkCore;
-=======
->>>>>>> 54f9aa0 (refactor)
 using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
