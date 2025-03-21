@@ -240,7 +240,7 @@ public class UIShopifyV2Controller : Controller
     [AllowAnonymous]
     [EnableCors(CorsPolicies.All)]
     [HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
-    public async Task<IActionResult> Checkout(string storeId, string? checkout_token, bool redirect = true, CancellationToken cancellationToken)
+    public async Task<IActionResult> Checkout(string storeId, string? checkout_token, CancellationToken cancellationToken, bool redirect = true)
     {
         if (checkout_token is null)
             return BadRequest("Invalid checkout token");
