@@ -28,6 +28,8 @@ using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Cors;
+using BTCPayServer.Plugins.Shopify;
+using ShopifyApiClient = BTCPayServer.Plugins.ShopifyPlugin.Clients.ShopifyApiClient;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin;
 
@@ -35,7 +37,6 @@ namespace BTCPayServer.Plugins.ShopifyPlugin;
 [AutoValidateAntiforgeryToken]
 public class UIShopifyV2Controller : Controller
 {
-    private readonly string[] _keywords = new[] { "bitcoin", "btc", "btcpayserver", "btcpay server" };
     private readonly StoreRepository _storeRepo;
 	private readonly InvoiceRepository _invoiceRepository;
 	private readonly UIInvoiceController _invoiceController;
@@ -239,7 +240,7 @@ public class UIShopifyV2Controller : Controller
 
 	static AsyncDuplicateLock OrderLocks = new AsyncDuplicateLock();
 	[AllowAnonymous]
-    [EnableCors("AllowAllOrigins")]
+    [EnableCors(CorsPolicies.All)]
     [HttpGet("~/stores/{storeId}/plugins/shopify-v2/create-invoice")]
 	public async Task<IActionResult> CreateInvoice(string storeId, string? checkout_token, CancellationToken cancellationToken)
 	{
@@ -248,11 +249,6 @@ public class UIShopifyV2Controller : Controller
             return orderResult.Result;
 
         var (order, store, client) = orderResult.Value!;
-        var containsKeyword = _keywords.Any(keyword => order.PaymentGatewayNames.Any(pgName => pgName.Contains(keyword, StringComparison.OrdinalIgnoreCase)));
-		if (!containsKeyword)
-        {
-            return BadRequest("Order wasn't fulfiled with BTCPay Server payment option");
-        }
 
         var orderId = order.Id.Id;
         var searchTerm = $"{Extensions.SHOPIFY_ORDER_ID_PREFIX}{orderId}";
@@ -303,8 +299,8 @@ public class UIShopifyV2Controller : Controller
 
 		if (invoice == null) return BadRequest("An error occured while creating invoice");
 
-		await client.AddBtcPayCheckoutUrlToOrderMetaData(orderId, Url.Action("Checkout", "UIShopifyV2", new { storeId, checkout_token }, Request.Scheme));
-        return  Ok();
+		await client.AddBtcPayCheckoutUrlToOrderMetaData(orderId, Url.Action(nameof(Checkout), "UIShopifyV2", new { storeId, checkout_token }, Request.Scheme));
+        return Ok();
     }
 
 
@@ -346,6 +342,10 @@ public class UIShopifyV2Controller : Controller
         var store = await _storeRepo.FindStore(storeId);
         if (order is null || store is null)
             return (BadRequest("Invalid checkout token"), null);
+
+        var containsKeyword = order.PaymentGatewayNames.Any(pgName => ShopifyService.IsBTCPayServerGateway(pgName));
+        if (!containsKeyword)
+            return (BadRequest("Order wasn't fulfiled with BTCPay Server payment option"), null);
 
         return (null, new OrderValidationResult(order, store, client));
     }
