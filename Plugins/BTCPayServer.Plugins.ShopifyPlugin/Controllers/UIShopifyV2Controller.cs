@@ -236,17 +236,25 @@ public class UIShopifyV2Controller : Controller
 		}
 	}
 
-	static AsyncDuplicateLock OrderLocks = new AsyncDuplicateLock();
-	[AllowAnonymous]
+    static AsyncDuplicateLock OrderLocks = new AsyncDuplicateLock();
+    [AllowAnonymous]
     [EnableCors(CorsPolicies.All)]
-    [HttpGet("~/stores/{storeId}/plugins/shopify-v2/create-invoice")]
-	public async Task<IActionResult> CreateInvoice(string storeId, string? checkout_token, CancellationToken cancellationToken)
-	{
-        var orderResult = await GetAndValidateOrder(storeId, checkout_token);
-        if (orderResult.Result != null)
-            return orderResult.Result;
+    [HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
+    public async Task<IActionResult> Checkout(string storeId, string? checkout_token, bool redirect, CancellationToken cancellationToken)
+    {
+        if (checkout_token is null)
+            return BadRequest("Invalid checkout token");
+        var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
+        if (client is null)
+            return BadRequest("Shopify plugin isn't configured properly");
+        var order = await client.GetOrderByCheckoutToken(checkout_token, true);
+        var store = await _storeRepo.FindStore(storeId);
+        if (order is null || store is null)
+            return BadRequest("Invalid checkout token");
 
-        var (order, store, client) = orderResult.Value!;
+        var containsKeyword = order.PaymentGatewayNames.Any(pgName => ShopifyHostedService.IsBTCPayServerGateway(pgName));
+        if (!containsKeyword)
+            return BadRequest("Order wasn't fulfiled with BTCPay Server payment option");
 
         var orderId = order.Id.Id;
         var searchTerm = $"{Extensions.SHOPIFY_ORDER_ID_PREFIX}{orderId}";
@@ -258,15 +266,16 @@ public class UIShopifyV2Controller : Controller
 
         // This prevent a race condition where two invoices get created for same order
         using var l = await OrderLocks.LockAsync(orderId, cancellationToken);
-        var orderInvoices = invoices.Where(e => e.GetShopifyOrderId() == orderId).ToArray();
+
+        var orderInvoices =
+            invoices.Where(e => e.GetShopifyOrderId() == orderId).ToArray();
         var currentInvoice = orderInvoices.FirstOrDefault();
         if (currentInvoice != null)
-            return Ok();
+            return redirect ? RedirectToInvoiceCheckout(currentInvoice.Id) : Ok();
 
         var baseTx = order.Transactions.FirstOrDefault(t => t is { Kind: "SALE", ManuallyCapturable: true });
         if (baseTx is null)
             return BadRequest("The shopify order is not capturable");
-
         var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName);
         var amount = order.TotalOutstandingSet.PresentmentMoney;
         var invoice = await _invoiceController.CreateInvoiceCoreRaw(
@@ -295,57 +304,10 @@ public class UIShopifyV2Controller : Controller
                 }, store,
                 Request.GetAbsoluteRoot(), [searchTerm], cancellationToken);
 
-		if (invoice == null) return BadRequest("An error occured while creating invoice");
+        if (invoice == null) return BadRequest("An error occured while creating invoice");
 
-		await client.AddBtcPayCheckoutUrlToOrderMetaData(orderId, Url.Action(nameof(Checkout), "UIShopifyV2", new { storeId, checkout_token }, Request.Scheme));
-        return Ok();
-    }
-
-
-
-    [AllowAnonymous]
-    [HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
-    public async Task<IActionResult> Checkout(string storeId, string? checkout_token, CancellationToken cancellationToken)
-    {
-        var orderResult = await GetAndValidateOrder(storeId, checkout_token);
-        if (orderResult.Result != null)
-            return orderResult.Result;
-
-        var (order, _, _) = orderResult.Value!;
-        var orderId = order.Id.Id;
-        var searchTerm = $"{Extensions.SHOPIFY_ORDER_ID_PREFIX}{orderId}";
-        var invoices = await _invoiceRepository.GetInvoices(new InvoiceQuery()
-        {
-            TextSearch = searchTerm,
-            StoreId = new[] { storeId }
-        });
-        var orderInvoices =
-            invoices.Where(e => e.GetShopifyOrderId() == orderId).ToArray();
-        var currentInvoice = orderInvoices.FirstOrDefault();
-        return currentInvoice == null ? BadRequest("No invoice found") : RedirectToInvoiceCheckout(currentInvoice.Id);
-    }
-
-    private record OrderValidationResult(ShopifyOrder Order, StoreData Store, ShopifyApiClient Client);
-
-    private async Task<(IActionResult? Result, OrderValidationResult? Value)> GetAndValidateOrder(string storeId, string? checkout_token)
-    {
-        if (checkout_token is null)
-            return (BadRequest("Invalid checkout token"), null);
-
-        var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
-        if (client is null)
-            return (BadRequest("Shopify plugin isn't configured properly"), null);
-
-        var order = await client.GetOrderByCheckoutToken(checkout_token, true);
-        var store = await _storeRepo.FindStore(storeId);
-        if (order is null || store is null)
-            return (BadRequest("Invalid checkout token"), null);
-
-        var containsKeyword = order.PaymentGatewayNames.Any(pgName => ShopifyHostedService.IsBTCPayServerGateway(pgName));
-        if (!containsKeyword)
-            return (BadRequest("Order wasn't fulfiled with BTCPay Server payment option"), null);
-
-        return (null, new OrderValidationResult(order, store, client));
+        await client.AddBtcPayCheckoutUrlToOrderMetaData(orderId, Url.Action(nameof(Checkout), "UIShopifyV2", new { storeId, checkout_token }, Request.Scheme));
+        return redirect ? RedirectToInvoiceCheckout(invoice.Id) : Ok();
     }
 
     private string? GetOrderUrl(string? shopUrl, long shopifyOrderId)
