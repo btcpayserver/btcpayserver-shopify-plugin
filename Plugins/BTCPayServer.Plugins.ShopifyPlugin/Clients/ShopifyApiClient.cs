@@ -5,19 +5,13 @@ using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
-using Google.Apis.Auth.OAuth2;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
-using System.Net;
 using System.Security.Cryptography;
 using Newtonsoft.Json.Serialization;
-using System.Globalization;
 using BTCPayServer.Plugins.ShopifyPlugin.JsonConverters;
 using Newtonsoft.Json.Converters;
-using System.Text.RegularExpressions;
-using System.Security;
 using Microsoft.AspNetCore.WebUtilities;
 using JArray = Newtonsoft.Json.Linq.JArray;
 
@@ -235,7 +229,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 		}
 
         const string OrderData =
-			"""
+            """
             fragment order on Order {
                 id
                 name
@@ -254,8 +248,9 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
                 transactions @include(if: $includeTxs) {
                     ...orderTransaction
                 }
+                ...orderPaymentProcess
             }
-            """ + "\n" + TransactionData;
+            """ + "\n" + TransactionData + "\n" + PaymentProcessData;
 
         private const string TransactionData =
 	        """
@@ -278,7 +273,14 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 	            }
 	        }
 	        """;
-		public async Task<ShopifyOrder> GetOrder(long orderId, bool withTransactions = false)
+
+        private const string PaymentProcessData =
+            """
+            fragment orderPaymentProcess on Order {
+                paymentGatewayNames
+            }
+            """;
+        public async Task<ShopifyOrder> GetOrder(long orderId, bool withTransactions = false)
 		{
 			// https://shopify.dev/docs/api/admin-graphql/2024-10/queries/order
 			var req = """
@@ -406,8 +408,30 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
                 """;
 			JObject respObj = await SendGraphQL(req, new JObject() { ["id"] = ShopifyId.DraftOrder(orderId).ToString() });
             return ShopifyId.Parse(respObj["data"]["draftOrderDuplicate"]["draftOrder"]["id"].Value<string>());
-		}
-	}
+        }
+
+        // https://shopify.dev/docs/api/admin-graphql/latest/mutations/orderUpdate
+        public async Task<ShopifyId> UpdateOrderMetafields(UpdateMetafields update)
+        {
+            var req = """
+                mutation updateOrderMetafields($input: OrderInput!) {
+                  orderUpdate(input: $input) {
+                    order {
+                      id
+                    }
+                    userErrors {
+                      message
+                      field
+                    }
+                  }
+                }
+                """;
+            JObject respObj = await SendGraphQL(req, new JObject { ["input"] = JObject.FromObject(update, JsonSerializer) });
+			var d = Unwrap(respObj, "orderUpdate");
+			return ShopifyId.Parse(d["order"]["id"].Value<string>());
+        }
+
+    }
 
 
     public record ShopifyApiClientCredentials
