@@ -5,11 +5,13 @@ using BTCPayServer.HostedServices;
 using BTCPayServer.Logging;
 using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Services.Invoices;
+<<<<<<< HEAD
 using BTCPayServer.Services.Rates;
 using Microsoft.EntityFrameworkCore;
+=======
+>>>>>>> 54f9aa0 (refactor)
 using Microsoft.Extensions.Logging;
 using System;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -72,6 +74,13 @@ public class ShopifyHostedService : EventHostedServiceBase
         }
     }
 
+    private static string[] _keywords = new[] { "bitcoin", "btc", "btcpayserver", "btcpay server" };
+
+    public static bool IsBTCPayServerGateway(string gateway)
+    {
+        return _keywords.Any(keyword => gateway.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+    }
+
     async Task<InvoiceLogs> Process(long shopifyOrderId, InvoiceEntity invoice)
     {
 		var logs = new InvoiceLogs();
@@ -80,7 +89,7 @@ public class ShopifyHostedService : EventHostedServiceBase
 			return logs;
 		if (await client.GetOrder(shopifyOrderId, true) is not { } order)
 			return logs;
-        
+
         var saleTx = order.Transactions.FirstOrDefault(h => h is { Kind: "SALE", Status: "PENDING" });
         if (saleTx is null)
             return logs;

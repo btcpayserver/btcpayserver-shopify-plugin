@@ -28,8 +28,6 @@ using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Cors;
-using BTCPayServer.Plugins.Shopify;
-using ShopifyApiClient = BTCPayServer.Plugins.ShopifyPlugin.Clients.ShopifyApiClient;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin;
 
@@ -343,7 +341,7 @@ public class UIShopifyV2Controller : Controller
         if (order is null || store is null)
             return (BadRequest("Invalid checkout token"), null);
 
-        var containsKeyword = order.PaymentGatewayNames.Any(pgName => ShopifyService.IsBTCPayServerGateway(pgName));
+        var containsKeyword = order.PaymentGatewayNames.Any(pgName => ShopifyHostedService.IsBTCPayServerGateway(pgName));
         if (!containsKeyword)
             return (BadRequest("Order wasn't fulfiled with BTCPay Server payment option"), null);
 
