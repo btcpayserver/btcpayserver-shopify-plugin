@@ -238,8 +238,8 @@ public class UIShopifyV2Controller : Controller
 
     static AsyncDuplicateLock OrderLocks = new AsyncDuplicateLock();
     [AllowAnonymous]
-    [EnableCors(CorsPolicies.All)]
-    [HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
+	[EnableCors(CorsPolicies.All)]
+	[HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
     public async Task<IActionResult> Checkout(string storeId, string? checkout_token, CancellationToken cancellationToken, bool redirect = true)
     {
         if (checkout_token is null)
@@ -306,7 +306,19 @@ public class UIShopifyV2Controller : Controller
 
         if (invoice == null) return BadRequest("An error occured while creating invoice");
 
-        await client.AddBtcPayCheckoutUrlToOrderMetaData(orderId, Url.Action(nameof(Checkout), "UIShopifyV2", new { storeId, checkout_token }, Request.Scheme));
+        await client.UpdateOrderMetafields(new()
+		{
+			Id = ShopifyId.Order(orderId),
+			Metafields = [
+				new()
+				{
+					Namespace = "custom",
+					Key = "btcpay_checkout_url",
+					Type = "single_line_text_field",
+					Value = Url.Action(nameof(Checkout), "UIShopifyV2", new { storeId, checkout_token }, Request.Scheme)
+				}
+			]
+		});
         return redirect ? RedirectToInvoiceCheckout(invoice.Id) : Ok();
     }
 

@@ -411,23 +411,13 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
         }
 
         // https://shopify.dev/docs/api/admin-graphql/latest/mutations/orderUpdate
-        public async Task<ShopifyId> AddBtcPayCheckoutUrlToOrderMetaData(long orderId, string btcpayCheckoutUrl)
+        public async Task<ShopifyId> UpdateOrderMetafields(UpdateMetafields update)
         {
             var req = """
                 mutation updateOrderMetafields($input: OrderInput!) {
                   orderUpdate(input: $input) {
                     order {
                       id
-                      metafields(first: 10) {
-                        edges {
-                          node {
-                            id
-                            namespace
-                            key
-                            value
-                          }
-                        }
-                      }
                     }
                     userErrors {
                       message
@@ -436,22 +426,9 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
                   }
                 }
                 """;
-            var input = new JObject
-            {
-                ["id"] = ShopifyId.Order(orderId).ToString(),
-                ["metafields"] = new JArray
-                {
-                    new JObject
-                    {
-                        ["namespace"] = "custom",
-                        ["key"] = "btcpay_checkout_url",
-                        ["type"] = "single_line_text_field",
-                        ["value"] = btcpayCheckoutUrl
-                    }
-                }
-            };
-            JObject respObj = await SendGraphQL(req, new JObject { ["input"] = input });
-            return ShopifyId.Parse(respObj["data"]["orderUpdate"]["order"]["id"].Value<string>());
+            JObject respObj = await SendGraphQL(req, new JObject { ["input"] = JObject.FromObject(update, JsonSerializer) });
+			var d = Unwrap(respObj, "orderUpdate");
+			return ShopifyId.Parse(d["order"]["id"].Value<string>());
         }
 
     }
