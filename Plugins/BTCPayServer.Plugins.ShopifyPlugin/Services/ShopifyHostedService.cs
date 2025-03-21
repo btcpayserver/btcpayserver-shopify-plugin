@@ -128,13 +128,13 @@ public class ShopifyHostedService : EventHostedServiceBase
             {
                 try
                 {
-                    decimal amount = invoice.Status == InvoiceStatus.Settled ? invoice.Price : invoice.PaidAmount.Net;
-                    int decimalPlaces = _currencyNameTable.GetNumberFormatInfo(invoice.Currency)?.CurrencyDecimalDigits ?? 2;
+                    decimal amount = invoice.Status == InvoiceStatus.Settled ? invoice.Price 
+                        : Math.Round(invoice.PaidAmount.Net, _currencyNameTable.GetNumberFormatInfo(invoice.Currency)?.CurrencyDecimalDigits ?? 2);
 
                     await client.CaptureOrder(new()
                     {
                         Currency = invoice.Currency,
-                        Amount = Math.Round(amount, decimalPlaces),
+                        Amount = amount,
                         Id = order.Id,
                         ParentTransactionId = saleTx.Id
                     });
