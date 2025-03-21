@@ -5,6 +5,7 @@ using BTCPayServer.HostedServices;
 using BTCPayServer.Logging;
 using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Services.Invoices;
+using BTCPayServer.Services.Rates;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
@@ -17,14 +18,17 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Services;
 
 public class ShopifyHostedService : EventHostedServiceBase
 {
+    private readonly CurrencyNameTable _currencyNameTable; 
     private readonly InvoiceRepository _invoiceRepository;
 	private readonly ShopifyClientFactory shopifyClientFactory;
 
     public ShopifyHostedService(EventAggregator eventAggregator,
         InvoiceRepository invoiceRepository,
+        CurrencyNameTable currencyNameTable,
         ShopifyClientFactory shopifyClientFactory,
         Logs logs) : base(eventAggregator, logs)
     {
+        _currencyNameTable = currencyNameTable;
         _invoiceRepository = invoiceRepository;
 		this.shopifyClientFactory = shopifyClientFactory;
     }
@@ -103,7 +107,7 @@ public class ShopifyHostedService : EventHostedServiceBase
                 .Where(h => h is { Kind: "REFUND", Status: "SUCCESS" }).ToArray();
 
         bool canRefund = captures.Length > 0 && captures.Length > refunds.Length;
-        if (invoice.Status is InvoiceStatus.Settled || (invoice.Status == InvoiceStatus.Expired && invoice.ExceptionStatus == InvoiceExceptionStatus.PaidPartial))
+        if (invoice is { Status: InvoiceStatus.Settled } or { Status:  InvoiceStatus.Expired, ExceptionStatus: InvoiceExceptionStatus.PaidPartial })
         {
             if (canRefund)
             {
@@ -127,7 +131,7 @@ public class ShopifyHostedService : EventHostedServiceBase
                     await client.CaptureOrder(new()
                     {
                         Currency = invoice.Currency,
-                        Amount = invoice.Price,
+                        Amount = Math.Round(invoice.PaidAmount.Net, _currencyNameTable.GetNumberFormatInfo(invoice.Currency).CurrencyDecimalDigits),
                         Id = order.Id,
                         ParentTransactionId = saleTx.Id
                     });
