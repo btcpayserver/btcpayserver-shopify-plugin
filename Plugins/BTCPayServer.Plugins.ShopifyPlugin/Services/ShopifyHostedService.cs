@@ -168,6 +168,12 @@ public class ShopifyHostedService : EventHostedServiceBase
 	}
 
 	private decimal NetSettled(InvoiceEntity invoice)
-	// The rounding is necessary, because shopify will interprete numbers wrong if the amount is not rounded
-	=> Math.Round(invoice.NetSettled, _currencyNameTable.GetNumberFormatInfo(invoice.Currency)?.CurrencyDecimalDigits ?? 2);
+	{
+		decimal netSettled = netSettled = invoice.GetPayments(true)
+						.Where(payment => payment.Status == PaymentStatus.Settled)
+						.Sum(payment => payment.InvoicePaidAmount.Net);
+		// Later we can just use this instead of calculating ourselves
+		// decimal netSettled = invoice.NetSettled;
+		return Math.Round(netSettled, _currencyNameTable.GetNumberFormatInfo(invoice.Currency)?.CurrencyDecimalDigits ?? 2);
+	}
 }
