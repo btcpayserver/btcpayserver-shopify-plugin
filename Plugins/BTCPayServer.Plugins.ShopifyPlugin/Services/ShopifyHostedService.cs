@@ -79,7 +79,7 @@ public class ShopifyHostedService : EventHostedServiceBase
     }
 
     async Task<InvoiceLogs> Process(long shopifyOrderId, InvoiceEntity invoice)
-    {
+	{
 		var logs = new InvoiceLogs();
 		var client = await shopifyClientFactory.CreateAPIClient(invoice.StoreId);
 		if (client is null)
@@ -87,95 +87,93 @@ public class ShopifyHostedService : EventHostedServiceBase
 		if (await client.GetOrder(shopifyOrderId, true) is not { } order)
 			return logs;
 
-        var saleTx = order.Transactions.FirstOrDefault(h => h is { Kind: "SALE", Status: "PENDING" });
-        if (saleTx is null)
-            return logs;
-        //technically, this exploit should not be possible as we use internal invoice tags to verify that the invoice was created by our controlled, dedicated endpoint.
-        if (!invoice.Currency.Equals(saleTx.AmountSet.PresentmentMoney.CurrencyCode, StringComparison.OrdinalIgnoreCase))
-        {
-            // because of parent_id present, currency will always be the one from parent transaction
-            // malicious attacker could potentially exploit this by creating invoice 
-            // in different currency and paying that one, registering order on Shopify as paid
-            // so if currency is supplied and is different from parent transaction currency we just won't register
-            logs.Write("Currency mismatch on Shopify.", InvoiceEventData.EventSeverity.Error);
-            return logs;
-        }
+		var saleTx = order.Transactions
+			.Where(h => h is { Kind: "SALE", Status: "PENDING" })
+			.Where(h => h.AmountSet.PresentmentMoney.CurrencyCode.Equals(invoice.Currency, StringComparison.OrdinalIgnoreCase))
+			.FirstOrDefault();
+		if (saleTx is null)
+			return logs;
 
-        //of the successful ones, get the ones we registered as a valid payment
-        var captures = 
-            order.Transactions
-            .Where(h => h is { Kind: "SALE", Status: "SUCCESS" }).ToArray();
-        
-        
-        //of the successful ones, get the ones we registered as a voiding of a previous successful payment
-        var refunds = 
-            order.Transactions
-                .Where(h => h is { Kind: "REFUND", Status: "SUCCESS" }).ToArray();
+		var shopifyPaid =
+			order.Transactions
+			.Where(h => h is { Kind: "SALE", Status: "SUCCESS" })
+			.Select(h => h.AmountSet.PresentmentMoney.Amount)
+			.Sum();
 
-        bool canRefund = captures.Length > 0 && captures.Length > refunds.Length;
-        if (invoice is { Status: InvoiceStatus.Settled } or { Status:  InvoiceStatus.Expired, ExceptionStatus: InvoiceExceptionStatus.PaidPartial })
-        {
-            if (canRefund)
-            {
-                if (order.CancelledAt is not null)
-                {
-                    logs.Write("The shopify order has already been cancelled, but the BTCPay Server has been successfully paid.",
-                        InvoiceEventData.EventSeverity.Warning);
-                }
-                else
-                {
-                    logs.Write("A transaction was previously recorded against the Shopify order. Skipping.",
-                        InvoiceEventData.EventSeverity.Warning);
-                }
-                return logs;
-            }
+		decimal? btcpayPaid = invoice switch
+		{
+			{ Status: InvoiceStatus.Settled } => invoice.Price,
+			{ Status: InvoiceStatus.Expired, ExceptionStatus: InvoiceExceptionStatus.PaidPartial } => NetSettled(invoice),
+			{ Status: InvoiceStatus.Invalid, ExceptionStatus: InvoiceExceptionStatus.Marked } => 0.0m,
+			{ Status: InvoiceStatus.Invalid } => NetSettled(invoice),
+			_ => null
+		};
+		if (btcpayPaid is not null)
+		{
+			var capture = btcpayPaid.Value - shopifyPaid;
+			if (capture > 0m)
+			{
+				if (order.CancelledAt is not null)
+				{
+					logs.Write("The shopify order has already been cancelled, but the BTCPay Server has been successfully paid.",
+						InvoiceEventData.EventSeverity.Warning);
+					return logs;
+				}
 
-            if (saleTx.ManuallyCapturable)
-            {
-                try
-                {
-                    decimal amount = invoice.Status == InvoiceStatus.Settled ? invoice.Price 
-                        : Math.Round(invoice.PaidAmount.Net, _currencyNameTable.GetNumberFormatInfo(invoice.Currency)?.CurrencyDecimalDigits ?? 2);
+				if (saleTx.ManuallyCapturable)
+				{
+					try
+					{
+						await client.CaptureOrder(new()
+						{
+							Currency = invoice.Currency,
+							Amount = capture,
+							Id = order.Id,
+							ParentTransactionId = saleTx.Id
+						});
+						logs.Write(
+							$"Successfully captured the order on Shopify. ({capture} {invoice.Currency})",
+							InvoiceEventData.EventSeverity.Info);
+					}
+					catch (Exception e)
+					{
+						logs.Write($"Failed to capture the Shopify order. ({capture} {invoice.Currency}) {e.Message} ",
+							InvoiceEventData.EventSeverity.Error);
+					}
+				}
+			}
+		}
+		else if (order.CancelledAt is null)
+		{
+			try
+			{
+				await client.CancelOrder(new()
+				{
+					OrderId = order.Id,
+					NotifyCustomer = false,
+					Reason = OrderCancelReason.DECLINED,
+					Restock = true,
+					Refund = false,
+					StaffNote = $"BTCPay Invoice {invoice.Id} is {invoice.Status}"
+				});
+				logs.Write($"Shopify order cancelled. (Invoice Status: {invoice.Status})", InvoiceEventData.EventSeverity.Warning);
+			}
+			catch (Exception e)
+			{
+				logs.Write($"Failed to cancel the Shopify order. {e.Message}",
+					InvoiceEventData.EventSeverity.Error);
+			}
+		}
+		return logs;
+	}
 
-                    await client.CaptureOrder(new()
-                    {
-                        Currency = invoice.Currency,
-                        Amount = amount,
-                        Id = order.Id,
-                        ParentTransactionId = saleTx.Id
-                    });
-                    logs.Write(
-                        $"Successfully captured the order on Shopify.",
-                        InvoiceEventData.EventSeverity.Info);
-                }
-                catch (Exception e)
-                {
-                    logs.Write($"Failed to capture the Shopify order. {e.Message}",
-                        InvoiceEventData.EventSeverity.Error);
-                }
-            }
-        }
-        else if(order.CancelledAt is null)
-        {
-            try
-            {
-                await client.CancelOrder(new()
-                {
-                    OrderId = order.Id,
-                    NotifyCustomer = false,
-                    Reason = OrderCancelReason.DECLINED,
-                    Restock = true,
-                    Refund = canRefund,
-                    StaffNote = $"BTCPay Invoice {invoice.Id} is {invoice.Status}"
-                });
-                logs.Write($"Shopify order cancelled. (Invoice Status: {invoice.Status})", InvoiceEventData.EventSeverity.Warning);
-            }
-            catch (Exception e)
-            {
-                logs.Write($"Failed to cancel the Shopify order. {e.Message}",
-                    InvoiceEventData.EventSeverity.Error);
-            }
-        }
-        return logs;
-    }
+	private decimal NetSettled(InvoiceEntity invoice)
+	{
+		decimal netSettled = netSettled = invoice.GetPayments(true)
+						.Where(payment => payment.Status == PaymentStatus.Settled)
+						.Sum(payment => payment.InvoicePaidAmount.Net);
+		// Later we can just use this instead of calculating ourselves
+		// decimal netSettled = invoice.NetSettled;
+		return Math.Round(netSettled, _currencyNameTable.GetNumberFormatInfo(invoice.Currency)?.CurrencyDecimalDigits ?? 2);
+	}
 }
