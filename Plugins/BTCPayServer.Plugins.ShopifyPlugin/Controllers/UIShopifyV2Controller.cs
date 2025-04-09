@@ -278,33 +278,38 @@ public class UIShopifyV2Controller : Controller
             return BadRequest("The shopify order is not capturable");
         var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName);
         var amount = order.TotalOutstandingSet.PresentmentMoney;
-        var invoice = await _invoiceController.CreateInvoiceCoreRaw(
-                new CreateInvoiceRequest()
-                {
-                    Amount = amount.Amount,
-                    Currency = amount.CurrencyCode,
-                    Metadata = new JObject
-                    {
-                        ["orderId"] = order.Name,
-                        ["orderUrl"] = GetOrderUrl(settings?.Setup?.ShopUrl, orderId),
-                        ["shopifyOrderId"] = orderId,
-                        ["shopifyOrderName"] = order.Name,
-                        ["gateway"] = baseTx.Gateway
-                    },
-                    AdditionalSearchTerms =
-                    [
-                        order.Name,
-                        orderId.ToString(CultureInfo.InvariantCulture),
-                        searchTerm
-                    ],
-                    Checkout = new()
-                    {
-                        RedirectURL = order.StatusPageUrl
-                    }
-                }, store,
-                Request.GetAbsoluteRoot(), [searchTerm], cancellationToken);
-
-        if (invoice == null) return BadRequest("An error occured while creating invoice");
+        try
+        {
+	        var invoice = await _invoiceController.CreateInvoiceCoreRaw(
+		        new CreateInvoiceRequest()
+		        {
+			        Amount = amount.Amount,
+			        Currency = amount.CurrencyCode,
+			        Metadata = new JObject
+			        {
+				        ["orderId"] = order.Name,
+				        ["orderUrl"] = GetOrderUrl(settings?.Setup?.ShopUrl, orderId),
+				        ["shopifyOrderId"] = orderId,
+				        ["shopifyOrderName"] = order.Name,
+				        ["gateway"] = baseTx.Gateway
+			        },
+			        AdditionalSearchTerms =
+			        [
+				        order.Name,
+				        orderId.ToString(CultureInfo.InvariantCulture),
+				        searchTerm
+			        ],
+			        Checkout = new()
+			        {
+				        RedirectURL = order.StatusPageUrl
+			        }
+		        }, store,
+		        Request.GetAbsoluteRoot(), [searchTerm], cancellationToken);
+        }
+        catch (BitpayHttpException e)
+        {
+	        return BadRequest(e.Message);
+        }
 
         await client.UpdateOrderMetafields(new()
 		{
