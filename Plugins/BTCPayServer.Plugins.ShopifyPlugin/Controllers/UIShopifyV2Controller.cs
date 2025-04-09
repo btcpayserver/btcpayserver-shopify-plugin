@@ -278,9 +278,10 @@ public class UIShopifyV2Controller : Controller
             return BadRequest("The shopify order is not capturable");
         var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName);
         var amount = order.TotalOutstandingSet.PresentmentMoney;
+        InvoiceEntity invoice;
         try
         {
-	        var invoice = await _invoiceController.CreateInvoiceCoreRaw(
+	        invoice = await _invoiceController.CreateInvoiceCoreRaw(
 		        new CreateInvoiceRequest()
 		        {
 			        Amount = amount.Amount,
