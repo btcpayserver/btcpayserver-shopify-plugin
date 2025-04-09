@@ -254,7 +254,7 @@ public class UIShopifyV2Controller : Controller
 
         var containsKeyword = order.PaymentGatewayNames.Any(pgName => ShopifyHostedService.IsBTCPayServerGateway(pgName));
         if (!containsKeyword)
-            return BadRequest("Order wasn't fulfiled with BTCPay Server payment option");
+            return NotFound("Order wasn't fulfilled with BTCPay Server payment option");
 
         var orderId = order.Id.Id;
         var searchTerm = $"{Extensions.SHOPIFY_ORDER_ID_PREFIX}{orderId}";
