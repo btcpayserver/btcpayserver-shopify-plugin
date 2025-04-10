@@ -108,11 +108,18 @@
         editContext.OnValidationRequested += HandleValidationRequested;
         messageStore = new ValidationMessageStore(editContext);
         _CanDeploy = true;
-        var localNetwork = BTCPayServer.Extensions.IsLocalNetwork(new Uri(PluginUrl, UriKind.Absolute).Host);
+
+        var pluginUrl = new Uri(PluginUrl, UriKind.Absolute);
+        var localNetwork = BTCPayServer.Extensions.IsLocalNetwork(pluginUrl.Host);
         if (localNetwork)
         {
             _CanDeploy = false;
-            FormError = "You can't deploy a shopify app with a local domain. Please use a public domain.";
+            FormError = "To deploy the Shopify app, you must access your BTCPay Server through a public domain.";
+        }
+        else if (pluginUrl.Scheme != Uri.UriSchemeHttps)
+        {
+            _CanDeploy = false;
+            FormError = "To deploy the Shopify app, you must access your BTCPay Server via HTTPS.";
         }
 
         try
