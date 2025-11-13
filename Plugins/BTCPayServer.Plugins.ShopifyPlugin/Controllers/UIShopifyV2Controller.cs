@@ -236,6 +236,55 @@ public class UIShopifyV2Controller : Controller
 		}
 	}
 
+    [HttpGet("~/stores/{storeId}/plugins/shopify-v2/configuration")]
+    public async Task<IActionResult> Configuration(string storeId)
+    {
+        var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName) ?? new();
+        if (settings.Setup is { DeployedCommit: null, AccessToken: null })
+        {
+            this.TempData.SetStatusMessageModel(new StatusMessageModel()
+            {
+                Message = "Kindly complete your Shopify setup",
+                Severity = StatusMessageModel.StatusSeverity.Error
+            });
+            return RedirectToAction(nameof(Index), new { storeId });
+        }
+        return View("/Views/UIShopify/Configuration.cshtml", new ShopifySettingsViewModel()
+        {
+			RestockOnInvoiceExpired = settings.RestockOnInvoiceExpired,
+            ClientId = settings.Setup?.ClientId,
+            ClientSecret = settings.Setup?.ClientSecret,
+            ShopUrl = settings.Setup?.ShopUrl,
+            ShopName = GetShopName(settings.Setup?.ShopUrl),
+            AppName = settings.PreferredAppName ?? ShopifyStoreSettings.DefaultAppName,
+        });
+    }
+
+    [HttpPost("~/stores/{storeId}/plugins/shopify-v2/configuration")]
+    public async Task<IActionResult> Configuration(ShopifySettingsViewModel model)
+    {
+		if (CurrentStore.Id == null) return NotFound();
+
+        var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(CurrentStore.Id, ShopifyStoreSettings.SettingsName) ?? new();
+        if (settings.Setup is { DeployedCommit: null, AccessToken: null })
+        {
+            this.TempData.SetStatusMessageModel(new StatusMessageModel()
+            {
+                Message = "Kindly complete your Shopify setup",
+                Severity = StatusMessageModel.StatusSeverity.Error
+            });
+            return RedirectToAction(nameof(Settings), new { storeId = CurrentStore.Id });
+        }
+		settings.RestockOnInvoiceExpired = model.RestockOnInvoiceExpired;
+        await _storeRepo.UpdateSetting(CurrentStore.Id, ShopifyStoreSettings.SettingsName, settings);
+        this.TempData.SetStatusMessageModel(new StatusMessageModel()
+        {
+            Message = "Shopify configuration updated successfully",
+            Severity = StatusMessageModel.StatusSeverity.Success
+        });
+        return RedirectToAction(nameof(Settings), new { storeId = CurrentStore.Id });
+    }
+
     static AsyncDuplicateLock OrderLocks = new AsyncDuplicateLock();
     [AllowAnonymous]
 	[EnableCors(CorsPolicies.All)]

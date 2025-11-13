@@ -26,5 +26,6 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.ViewModels
 		public string CLIToken { get; set; }
 		public string ShopUrl { get; set; }
 		public string ShopName { get; set; }
+        public bool RestockOnInvoiceExpired { get; set; }
     }
 }

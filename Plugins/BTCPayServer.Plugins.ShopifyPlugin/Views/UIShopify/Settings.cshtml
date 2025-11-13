@@ -32,6 +32,10 @@
             </small>
         </h2>
         <div>
+            @if (Model.Step == ShopifySettingsViewModel.State.Done)
+            {
+                <a asp-controller="UIShopifyV2" asp-action="Configuration" asp-route-storeId="@storeId" class="btn btn-primary">Configuration</a>
+            }
             @if (Model.Step != ShopifySettingsViewModel.State.WaitingClientCreds)
             {
                 <form method="post">
