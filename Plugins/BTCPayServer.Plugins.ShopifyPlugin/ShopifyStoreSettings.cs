@@ -11,7 +11,8 @@ namespace BTCPayServer.Plugins.ShopifyPlugin
 	    }
 		public const string SettingsName = "ShopifyPluginSettings";
 		public const string DefaultAppName = "BTCPay Server";
-	}
+        public bool RestockOnInvoiceExpired { get; set; } = true;
+    }
 
     public class ShopifySetupSettings
     {

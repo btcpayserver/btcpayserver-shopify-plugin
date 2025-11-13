@@ -1,4 +1,8 @@
-﻿using BTCPayServer.Client.Models;
+﻿using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using BTCPayServer.Client.Models;
 using BTCPayServer.Data;
 using BTCPayServer.Events;
 using BTCPayServer.HostedServices;
@@ -6,27 +10,27 @@ using BTCPayServer.Logging;
 using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Rates;
+using BTCPayServer.Services.Stores;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin.Services;
 
 public class ShopifyHostedService : EventHostedServiceBase
 {
+    private readonly StoreRepository _storeRepo;
     private readonly CurrencyNameTable _currencyNameTable; 
     private readonly InvoiceRepository _invoiceRepository;
 	private readonly ShopifyClientFactory shopifyClientFactory;
 
-    public ShopifyHostedService(EventAggregator eventAggregator,
+    public ShopifyHostedService(StoreRepository storeRepo,
+		EventAggregator eventAggregator,
         InvoiceRepository invoiceRepository,
         CurrencyNameTable currencyNameTable,
         ShopifyClientFactory shopifyClientFactory,
         Logs logs) : base(eventAggregator, logs)
     {
+		_storeRepo = storeRepo;
         _currencyNameTable = currencyNameTable;
         _invoiceRepository = invoiceRepository;
 		this.shopifyClientFactory = shopifyClientFactory;
@@ -82,7 +86,8 @@ public class ShopifyHostedService : EventHostedServiceBase
 	{
 		var logs = new InvoiceLogs();
 		var client = await shopifyClientFactory.CreateAPIClient(invoice.StoreId);
-		if (client is null)
+        var shopifySettings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(invoice.StoreId, ShopifyStoreSettings.SettingsName);
+        if (client is null || shopifySettings is null)
 			return logs;
 		if (await client.GetOrder(shopifyOrderId, true) is not { } order)
 			return logs;
@@ -152,8 +157,8 @@ public class ShopifyHostedService : EventHostedServiceBase
 					OrderId = order.Id,
 					NotifyCustomer = false,
 					Reason = OrderCancelReason.DECLINED,
-					Restock = true,
-					Refund = false,
+					Restock = shopifySettings.RestockOnInvoiceExpired,
+                    Refund = false,
 					StaffNote = $"BTCPay Invoice {invoice.Id} is {invoice.Status}"
 				});
 				logs.Write($"Shopify order cancelled. (Invoice Status: {invoice.Status})", InvoiceEventData.EventSeverity.Warning);
