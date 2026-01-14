@@ -1,10 +1,11 @@
 @using BTCPayServer.Abstractions.Extensions
+@using BTCPayServer.Plugins.ShopifyPlugin
 @using BTCPayServer.Plugins.ShopifyPlugin.ViewModels
 @using Microsoft.AspNetCore.Routing
 @using BTCPayServer.Plugins.ShopifyPlugin.Blazor
 @model ShopifySettingsViewModel
 @{
-    ViewData.SetActivePage("Shopify", "Update Shopify Plugin Settings", "Shopify");
+    ViewData.SetActivePage(ShopifyV2PluginNavPages.Settings, "Update Shopify Plugin Settings", "Shopify");
     Layout = "_Layout";
     bool shopifyCredsSet = Model.Step != ShopifySettingsViewModel.State.WaitingClientCreds;
     var storeId = (string)this.Context.GetRouteValue("storeId");
