@@ -245,13 +245,6 @@ public class UIShopifyV2Controller : Controller
 		}
 		else // (command is null)
         {
-            var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
-            if (client is not null)
-			{
-				var order = await client.GetOrder(7304009351501);
-            }
-            var invoice = await _invoiceRepository.GetInvoices(new InvoiceQuery {  StoreId = new[] { storeId }, TextSearch = "7303905182029" });
-
             return View("/Views/UIShopify/Settings.cshtml", new ShopifySettingsViewModel()
 			{
 				ClientId = settings.Setup?.ClientId,
@@ -273,7 +266,7 @@ public class UIShopifyV2Controller : Controller
 		}
 	}
 
-    [AllowAnonymous]
+    /*[AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [HttpPost("~/stores/{storeId}/plugins/shopify-v2/btcpay/webhook/order-transactions")]
     public async Task<IActionResult> OrderTransactionsWebhook([FromRoute] string storeId)
@@ -410,6 +403,46 @@ public class UIShopifyV2Controller : Controller
         {
 			return NotFound();
         }
+    }*/
+
+    [HttpGet("~/stores/{storeId}/plugins/shopify-v2/refunds/settings")]
+    [Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie, Policy = Policies.CanModifyStoreSettings)]
+    public async Task<IActionResult> RefundSettings(string storeId)
+    {
+        var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName) ?? new();
+        settings.Setup ??= new();
+        Enum.TryParse<ShopifyRefundWebhookSettingsViewModel.RefundOption>(settings.Setup?.SelectedRefundOption, ignoreCase: true, out var refundOption);
+        var vm = new ShopifyRefundWebhookSettingsViewModel
+        {
+            WebhookUrl = Url.Action(nameof(Webhook), "UIShopifyV2", new { storeId }, Request.Scheme),
+            WebhookSecret = settings.Setup?.WebhookSignature,
+            SpreadPercentage = settings.Setup.SpreadPercentage,
+            SelectedRefundOption = refundOption
+        };
+        return View("/Views/UIShopify/RefundSettings.cshtml", vm);
+    }
+
+    [HttpPost("~/stores/{storeId}/plugins/shopify-v2/refunds/settings")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RefundSettings(string storeId, ShopifyRefundWebhookSettingsViewModel vm)
+    {
+        if (!ModelState.IsValid)
+        {
+            vm.WebhookUrl = Url.Action(nameof(Webhook), "UIShopifyV2", new { storeId }, Request.Scheme);
+            return View("/Views/UIShopify/RefundSettings.cshtml", vm);
+        }
+        var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName) ?? new();
+        settings.Setup ??= new();
+        settings.Setup.WebhookSignature = vm.WebhookSecret;
+        settings.Setup.SpreadPercentage = vm.SpreadPercentage;
+        settings.Setup.SelectedRefundOption = vm.SelectedRefundOption.ToString();
+        await _storeRepo.UpdateSetting<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName, settings);
+        this.TempData.SetStatusMessageModel(new StatusMessageModel()
+        {
+            Message = "Refund settings saved successfully",
+            Severity = StatusMessageModel.StatusSeverity.Success
+        });
+        return RedirectToAction(nameof(RefundSettings), new { storeId });
     }
 
     private bool ValidateShopifyWebhook(string requestBody, string hmacHeader, string secret)
@@ -565,29 +598,158 @@ public class UIShopifyV2Controller : Controller
 	// leaving it here.
 	public async Task<IActionResult> Webhook(string storeId)
 	{
-		var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName);
-		string requestBody;
-		using (var reader = new StreamReader(Request.Body, Encoding.UTF8))
-		{
-			requestBody = await reader.ReadToEndAsync();
-		}
-		var webhookInfo = GetWebhookInfoFromHeader(Request);
-		if (webhookInfo is null)
-			return BadRequest("Missing webhook info in HTTP headers");
+        try
+        {
+            var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName);
+            string requestBody;
+            using (var reader = new StreamReader(Request.Body, Encoding.UTF8))
+            {
+                requestBody = await reader.ReadToEndAsync();
+            }
+            var webhookInfo = GetWebhookInfoFromHeader(Request);
+            if (webhookInfo is null)
+                return BadRequest("Missing webhook info in HTTP headers");
 
-		var client = await this.ShopifyClientFactory.CreateAppClient(storeId);
-		if (client is null)
-			return NotFound();
-		if (!client.VerifyWebhookSignature(requestBody, webhookInfo.HMac))
-			return Unauthorized("Invalid HMAC signature");
+            var client = await this.ShopifyClientFactory.CreateAppClient(storeId);
+            if (client is null)
+                return NotFound();
+            if (!client.VerifyWebhookSignature(requestBody, webhookInfo.HMac))
+                return Unauthorized("Invalid HMAC signature");
 
-		// https://shopify.dev/docs/api/webhooks?reference=toml#list-of-topics-orders/create
-		//if (webhookInfo.FullTopicName == "orders/create")
-		//{
-		//	var order = JsonConvert.DeserializeObject<dynamic>(requestBody)!;
-		//	checkoutTokens.Add(new(storeId, (string)order.checkout_token), (long)order.id);
-		//}
+            // https://shopify.dev/docs/api/webhooks?reference=toml#list-of-topics-orders/create
+            //if (webhookInfo.FullTopicName == "orders/create")
+            //{
+            //	var order = JsonConvert.DeserializeObject<dynamic>(requestBody)!;
+            //	checkoutTokens.Add(new(storeId, (string)order.checkout_token), (long)order.id);
+            //}
 
-		return Ok();
+            if (webhookInfo.FullTopicName == "refunds/create")
+            {
+                return await HandleRefundCreateWebhook(storeId, requestBody, settings);
+            }
+
+            return Ok();
+        }
+        catch (Exception)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError);
+        }
 	}
+
+
+	public async Task<IActionResult> HandleRefundCreateWebhook(string storeId, string requestBody, ShopifyStoreSettings settings)
+    {
+        var pmi = PayoutMethodId.Parse("BTC-CHAIN");
+        var store = await _storeRepo.FindStore(storeId);
+        var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
+        if (string.IsNullOrEmpty(settings?.Setup?.WebhookSignature) || store == null || client == null)
+            return BadRequest("Store isn't registered or refunds isn't configured with shopify plugin");
+
+        var payload = JObject.Parse(requestBody);
+        if (payload?["order_id"] == null)
+            return BadRequest(new { error = "Payload does not contain order_id" });
+
+        if (!long.TryParse(payload["order_id"]!.ToString(), out var shopifyOrderId))
+            return BadRequest(new { error = "Order ID is invalid" });
+
+        if (await client.GetOrder(shopifyOrderId, true) is not { } order)
+            return BadRequest(new { error = "Order is invalid" });
+
+        var emailSender = await _emailSenderFactory.GetEmailSender(storeId);
+        var isEmailSettingsConfigured = (await emailSender.GetEmailSettings() ?? new EmailSettings()).IsComplete();
+        if (!isEmailSettingsConfigured)
+            return BadRequest(new { error = "Email Server not configured for store" });
+
+        // Todo: Shopify meta data so that the get invoice would be based on metadata and not text search
+        var orderInvoices = await _invoiceRepository.GetInvoices(new InvoiceQuery
+        {
+            StoreId = new[] { storeId },
+            TextSearch = shopifyOrderId.ToString()
+        });
+        var invoice = orderInvoices?.FirstOrDefault();
+        if (invoice == null)
+            return BadRequest(new { error = "No invoice matching this criteria" });
+
+        if (invoice.Refunds.Any() || !invoice.GetInvoiceState().CanRefund())
+            return BadRequest(new
+            {
+                error = "Cannot process invoice refund at the moment, as invoice either has active refunds or invoice state cannot process refund"
+            });
+
+        var supportedPmis = _payoutHandlers.GetSupportedPayoutMethods(store);
+        if (!supportedPmis.Contains(pmi))
+            return BadRequest("Invalid payout method");
+
+        var paymentMethodId = invoice.GetClosestPaymentMethodId(new[] { pmi });
+        var paymentMethod = paymentMethodId == null ? null : invoice.GetPaymentPrompt(paymentMethodId);
+        if (paymentMethod?.Currency == null)
+            return BadRequest("Invalid payout method");
+
+        int ppDivisibility = paymentMethod.Divisibility;
+        var accounting = paymentMethod.Calculate();
+        var cryptoPaid = accounting.Paid;
+        var dueAmount = accounting.TotalDue;
+        var cdCurrency = _currencyNameTable.GetCurrencyData(invoice.Currency, true);
+
+        RateResult rateResult = await _rateProvider.FetchRate(new CurrencyPair(paymentMethod.Currency, invoice.Currency),
+            store.GetStoreBlob().GetRateRules(_defaultRules), new StoreIdRateContext(store.Id), CancellationToken.None);
+        if (rateResult.BidAsk == null)
+            return BadRequest($"to fetch rate {rateResult.EvaluatedRule}");
+
+        var paidCurrency = Math.Round(cryptoPaid * paymentMethod.Rate, cdCurrency.Divisibility);
+        CreatePullPayment createPullPayment = new CreatePullPayment
+        {
+            Name = $"Refund {invoice.Id}",
+            StoreId = invoice.StoreId,
+            PayoutMethods = new[] { pmi },
+            BOLT11Expiration = store.GetStoreBlob().RefundBOLT11Expiration
+        };
+        switch (settings.Setup.SelectedRefundOption)
+        {
+            case "RateThen":
+                createPullPayment.Currency = paymentMethod.Currency;
+                createPullPayment.Amount = cryptoPaid.RoundToSignificant(paymentMethod.Divisibility);
+                createPullPayment.AutoApproveClaims = true;
+                break;
+
+            case "CurrentRate":
+                createPullPayment.Currency = paymentMethod.Currency;
+                createPullPayment.Amount = Math.Round(paidCurrency / rateResult.BidAsk.Bid, paymentMethod.Divisibility);
+                createPullPayment.AutoApproveClaims = true;
+                break;
+
+            case "Fiat":
+                ppDivisibility = cdCurrency.Divisibility;
+                createPullPayment.Currency = invoice.Currency;
+                createPullPayment.Amount = paidCurrency;
+                createPullPayment.AutoApproveClaims = false;
+                break;
+
+            default:
+                return BadRequest("No refund option configured in plugin");
+        }
+
+        if (settings.Setup.SpreadPercentage is > 0 and <= 100)
+        {
+            var reduceByAmount = createPullPayment.Amount * (settings.Setup.SpreadPercentage / 100);
+            createPullPayment.Amount = Math.Round(createPullPayment.Amount - reduceByAmount, ppDivisibility);
+        }
+        await using var ctx = _dbContextFactory.CreateContext();
+        var ppId = await _paymentHostedService.CreatePullPayment(createPullPayment);
+        ctx.Refunds.Add(new RefundData
+        {
+            InvoiceDataId = invoice.Id,
+            PullPaymentDataId = ppId
+        });
+        await ctx.SaveChangesAsync();
+
+        var claimUrl = Url.Action(
+            action: nameof(UIPullPaymentController.ViewPullPayment),
+            controller: "UIPullPayment",
+            values: new { pullPaymentId = ppId },
+            protocol: Request.Scheme
+        );
+        await _emailService.SendRefundOrderEmail(storeId, order.Customer?.DefaultEmailAddress?.EmailAddress, shopifyOrderId.ToString(), claimUrl);
+        return Ok();
+    }
 }

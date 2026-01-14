@@ -1,0 +1,95 @@
+@using BTCPayServer.Abstractions.Contracts
+@using BTCPayServer.Abstractions.Extensions
+@using BTCPayServer.Plugins.ShopifyPlugin
+@using BTCPayServer.Plugins.ShopifyPlugin.ViewModels
+@using Microsoft.AspNetCore.Routing
+@using BTCPayServer.Plugins.ShopifyPlugin.Blazor
+@inject IScopeProvider ScopeProvider
+@model ShopifyRefundWebhookSettingsViewModel
+@{
+    var storeId = ScopeProvider.GetCurrentStoreId();
+    ViewData.SetActivePage(ShopifyV2PluginNavPages.Refunds, "Shopify Refund Settings", "Shopify");
+    Layout = "_Layout";
+
+}
+
+<div class="mt-4">
+    <div class="row">
+        <div class="sticky-header">
+            <h2 class="my-1">@ViewData["Title"]</h2>
+        </div>
+        <partial name="_StatusMessage" />
+
+        <div class="col-lg-8">
+            <div class="alert alert-info">
+                <p class="mb-2">
+                    This webhook notifies BTCPay Server when a refund occurs for orders paid via BTCPay Server,
+                    and sends a secure claim link to the customer by email.
+                </p>
+                <p class="mb-2">
+                    Copy the webhook URL below and paste it into your Shopify Admin dashboard.
+                </p>
+                <ul class="mb-2">
+                    <li>Go to <strong>Settings → Notifications → Webhooks</strong></li>
+                    <li>Create a webhook for the <strong>Refund create</strong> event</li>
+                    <li>Set the format to <strong>JSON</strong></li>
+                    <li>Use Webhook API version <strong>2026-01</strong></li>
+                </ul>
+            </div>
+
+            <form asp-action="RefundSettings" asp-route-storeId="@storeId" method="post">
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Webhook URL</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" value="@Model.WebhookUrl" readonly />
+                        <button type="button" class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText('@Model.WebhookUrl')">
+                            Copy
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label asp-for="WebhookSecret" class="form-label fw-bold">Webhook Secret</label>
+                    <input asp-for="WebhookSecret" class="form-control" placeholder="Enter your Shopify webhook secret" />
+                    <span asp-validation-for="WebhookSecret" class="text-danger"></span>
+                    <div class="form-text">
+                        Your webhook secret is displayed on the webhook page.. `Your webhooks will be signed with webhook_secret`
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Refund Option Method</label>
+                    <span asp-validation-for="SelectedRefundOption" class="text-danger"></span>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" asp-for="SelectedRefundOption" value="RateThen" id="refundRateThen" />
+                        <label class="form-check-label" for="refundRateThen">Use exchange rate at time of original payment</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" asp-for="SelectedRefundOption" value="CurrentRate" id="refundCurrentRate" />
+                        <label class="form-check-label" for="refundCurrentRate"> Use current exchange rate at time of refund</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" asp-for="SelectedRefundOption" value="Fiat" id="refundFiat" />
+                        <label class="form-check-label" for="refundFiat">Refund using original fiat amount</label>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label asp-for="SpreadPercentage" class="form-label fw-bold">Refund Spread Percentage</label>
+                    <div class="input-group">
+                        <input asp-for="SpreadPercentage" type="number" class="form-control" step="0.01" min="0" max="100" placeholder="e.g. 2.5" />
+                        <span asp-validation-for="SpreadPercentage" class="text-danger"></span>
+                        <span class="input-group-text">%</span>
+                    </div>
+                    <div class="form-text">
+                        Optional. This percentage will be deducted from the refund amount to account for exchange rate volatility.
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
