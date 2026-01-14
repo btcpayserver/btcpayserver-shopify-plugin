@@ -235,6 +235,17 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
                 name
                 cancelledAt
                 statusPageUrl
+                customer {
+                  defaultEmailAddress {
+                    emailAddress
+                  }
+                }
+                btcpayInvoiceId: metafield(
+                    namespace: "custom"
+                    key: "btcpay_invoice_id"
+                ) {
+                    value
+                }
                 totalOutstandingSet {
                     shopMoney {
                         amount
@@ -306,7 +317,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			var jobj = new JObject() { ["query"] = req };
 			if (variables is not null)
 				jobj.Add("variables", variables);
-			return new HttpRequestMessage(HttpMethod.Post, $"{_shopUrl}/admin/api/2024-10/graphql.json")
+			return new HttpRequestMessage(HttpMethod.Post, $"{_shopUrl}/admin/api/2026-01/graphql.json")
 			{
 				Content = new StringContent(jobj.ToString(), Encoding.UTF8, "application/json")
 			};
@@ -430,7 +441,6 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			var d = Unwrap(respObj, "orderUpdate");
 			return ShopifyId.Parse(d["order"]["id"].Value<string>());
         }
-
     }
 
 

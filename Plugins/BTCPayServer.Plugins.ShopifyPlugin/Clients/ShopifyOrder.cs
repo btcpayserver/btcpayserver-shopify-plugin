@@ -49,7 +49,9 @@ public class OrderTransaction
 }
 public class ShopifyOrder
 {
-	public string StatusPageUrl { get; set; }
+    public ShopifyCustomer Customer { get; set; }
+    public ShopifyMetafield BtcpayInvoiceId { get; set; }
+    public string StatusPageUrl { get; set; }
 	public ShopifyId Id { get; set; }
 	public string Name { get; set; }
 	public DateTimeOffset? CancelledAt { get; set; }
@@ -67,4 +69,16 @@ public class ShopifyMoney
 	public string CurrencyCode { get; set; }
 	[JsonConverter(typeof(BTCPayServer.JsonConverters.NumericStringJsonConverter))]
 	public decimal Amount { get; set; }
+}
+public class ShopifyCustomer
+{
+    public ShopifyCustomerEmail DefaultEmailAddress { get; set; }
+}
+public class ShopifyCustomerEmail
+{
+    public string EmailAddress { get; set; }
+}
+public class ShopifyMetafield
+{
+    public string Value { get; set; }
 }

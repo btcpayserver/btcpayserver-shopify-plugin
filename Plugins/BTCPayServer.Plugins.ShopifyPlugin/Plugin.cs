@@ -15,7 +15,8 @@ public class Plugin : BaseBTCPayServerPlugin
     public override void Execute(IServiceCollection services)
     {
         services.AddUIExtension("header-nav", "ShopifyPluginHeaderNav");
-		services.AddSingleton<ShopifyClientFactory>();
+        services.AddSingleton<EmailService>();
+        services.AddSingleton<ShopifyClientFactory>();
         services.AddHostedService<ShopifyHostedService>();
     }
 }
