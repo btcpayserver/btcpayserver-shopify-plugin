@@ -9,17 +9,22 @@
 @{
     var storeId = ScopeProvider.GetCurrentStoreId();
     ViewData.SetActivePage(ShopifyV2PluginNavPages.Refunds, "Shopify Refund Settings", "Shopify");
+    var storeEmailSettingsConfigured = (bool)ViewData["StoreEmailSettingsConfigured"];
     Layout = "_Layout";
-
 }
+
+<div class="sticky-header">
+    <h2 text-translate="true">@ViewData["Title"]</h2>
+    <div class="d-flex gap-3 mt-3 mt-sm-0">
+        <button type="submit" form="refundSettingsForm" class="btn btn-primary" @(storeEmailSettingsConfigured ? "" : "disabled")>
+            Save Settings
+        </button>
+    </div>
+</div>
+<partial name="_StatusMessage" />
 
 <div class="mt-4">
     <div class="row">
-        <div class="sticky-header">
-            <h2 class="my-1">@ViewData["Title"]</h2>
-        </div>
-        <partial name="_StatusMessage" />
-
         <div class="col-lg-8">
             <div class="alert alert-info">
                 <p class="mb-2">
@@ -37,7 +42,7 @@
                 </ul>
             </div>
 
-            <form asp-action="RefundSettings" asp-route-storeId="@storeId" method="post">
+            <form id="refundSettingsForm" asp-action="RefundSettings" asp-route-storeId="@storeId" method="post">
                 <div class="mb-4">
                     <label class="form-label fw-bold">Webhook URL</label>
                     <div class="input-group">
@@ -68,10 +73,6 @@
                         <input class="form-check-input" type="radio" asp-for="SelectedRefundOption" value="CurrentRate" id="refundCurrentRate" />
                         <label class="form-check-label" for="refundCurrentRate"> Use current exchange rate at time of refund</label>
                     </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" asp-for="SelectedRefundOption" value="Fiat" id="refundFiat" />
-                        <label class="form-check-label" for="refundFiat">Refund using original fiat amount</label>
-                    </div>
                 </div>
 
                 <div class="mb-4">
@@ -84,10 +85,6 @@
                     <div class="form-text">
                         Optional. This percentage will be deducted from the refund amount to account for exchange rate volatility.
                     </div>
-                </div>
-
-                <div class="d-flex justify-content-end">
-                    <button type="submit" class="btn btn-primary">Save Settings</button>
                 </div>
             </form>
         </div>

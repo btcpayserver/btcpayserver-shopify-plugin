@@ -50,6 +50,8 @@ public class OrderTransaction
 public class ShopifyOrder
 {
     public ShopifyCustomer Customer { get; set; }
+
+    [JsonProperty("btcpayInvoiceId")]
     public ShopifyMetafield BtcpayInvoiceId { get; set; }
     public string StatusPageUrl { get; set; }
 	public ShopifyId Id { get; set; }
@@ -72,6 +74,7 @@ public class ShopifyMoney
 }
 public class ShopifyCustomer
 {
+    public string DisplayName { get; set; }
     public ShopifyCustomerEmail DefaultEmailAddress { get; set; }
 }
 public class ShopifyCustomerEmail
