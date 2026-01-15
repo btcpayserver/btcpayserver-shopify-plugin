@@ -19,19 +19,19 @@ public class EmailService
     }
 
 
-    public async Task SendRefundOrderEmail(string storeId, string recipientEmail, string shopifyOrderId, string claimUrl)
+    public async Task SendRefundOrderEmail(string storeId, string recipientEmail, string recipientName, string shopifyOrderId, string claimUrl)
     {
         var settings = await (await _emailSender.GetEmailSender(storeId)).GetEmailSettings();
         if (!settings.IsComplete() || string.IsNullOrEmpty(recipientEmail))
             return;
 
-        string refundEmailBody = @"
-Hello Plugin Owner,
+        string refundEmailBody = $@"
+Hello {recipientName},
 
 A refund has been issued for your recent shopify order.
 
 To claim your refund, please use the secure link below:
-{CLAIM_URL}
+{claimUrl}
 
 This link will guide you through completing your refund.
 
@@ -39,7 +39,6 @@ If you have any questions, please contact the merchant directly.
 
 Thank you
 ";
-        refundEmailBody = refundEmailBody.Replace("{CLAIM_URL}", claimUrl);
         var client = await settings.CreateSmtpClient();
         try
         {

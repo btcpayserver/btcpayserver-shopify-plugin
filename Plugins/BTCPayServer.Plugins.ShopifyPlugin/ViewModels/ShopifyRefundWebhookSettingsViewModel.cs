@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Newtonsoft.Json;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
 
@@ -7,8 +8,7 @@ public class ShopifyRefundWebhookSettingsViewModel
     public enum RefundOption
     {
         RateThen,
-        CurrentRate,
-        Fiat
+        CurrentRate
     }
 
     public string WebhookUrl { get; set; }
