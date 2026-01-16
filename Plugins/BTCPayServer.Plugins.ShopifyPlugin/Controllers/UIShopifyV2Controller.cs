@@ -36,7 +36,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Primitives;
 using NBitcoin;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using StoreData = BTCPayServer.Data.StoreData;
 
@@ -521,7 +520,7 @@ public class UIShopifyV2Controller : Controller
 
         // refund_line_items contains the actual product to be refunded refunds
         var refundLineItems = payload["refund_line_items"] as JArray ?? new JArray();
-        var lineItemsRefundAmount = refundLineItems.Sum(item => decimal.TryParse(item["subtotal"]?.ToString(), out var subtotal) ? subtotal : 0m);
+        var lineItemsRefundAmount = refundLineItems.Sum(item => Math.Abs(decimal.TryParse(item["subtotal"]?.ToString(), out var subtotal) ? subtotal : 0m));
 
         // order_adjustments contains shipping refunds, restocking fees, and discrepancies
         var orderAdjustments = payload["order_adjustments"] as JArray ?? new JArray();
@@ -637,8 +636,7 @@ public class UIShopifyV2Controller : Controller
                 ["Name"] = customer?.DisplayName ?? ""
             }
         };
-        var triggerEvent = new TriggerEvent(storeId, ShopifyMailTriggers.RefundCreated, model, null);
-        _eventAggregator.Publish(triggerEvent);
+        _eventAggregator.Publish(new TriggerEvent(storeId, ShopifyMailTriggers.RefundCreated, model, null));
         return Ok();
     }
 }
