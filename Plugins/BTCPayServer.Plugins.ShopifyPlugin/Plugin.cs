@@ -53,5 +53,5 @@ public class Plugin : BaseBTCPayServerPlugin
 
 public static class ShopifyMailTriggers
 {
-    public const string RefundCreated = "SRV-ShopifyRefundCreated";
+    public const string RefundCreated = "ShopifyRefundCreated";
 }
