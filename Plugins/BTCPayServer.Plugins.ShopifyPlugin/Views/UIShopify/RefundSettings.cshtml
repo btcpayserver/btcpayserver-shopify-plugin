@@ -9,7 +9,7 @@
 @model ShopifyRefundWebhookSettingsViewModel
 @{
     var storeId = ScopeProvider.GetCurrentStoreId();
-    ViewData.SetLayoutModel(new LayoutModel("Shopify-Refund", "Shopify Refund Settings"));
+    ViewData.SetLayoutModel(new LayoutModel("Shopify-Refund", "Shopify Refund Settings") { ActiveCategory = "ShopifyV2" });
     var storeEmailSettingsConfigured = (bool)ViewData["StoreEmailSettingsConfigured"];
     Layout = "_Layout";
 }
@@ -48,12 +48,11 @@
                     <label class="form-label fw-bold">Webhook URL</label>
                     <div class="input-group">
                         <input type="text" class="form-control" value="@Model.WebhookUrl" readonly />
-                        <button type="button" class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText('@Model.WebhookUrl')">
-                            Copy
+                        <button type="button" class="btn btn-outline-secondary clipboard-button" data-clipboard="@Model.WebhookUrl">
+                            <vc:icon symbol="actions-copy" />
                         </button>
                     </div>
                 </div>
-
                 <div class="mb-4">
                     <label asp-for="WebhookSecret" class="form-label fw-bold">Webhook Secret</label>
                     <input asp-for="WebhookSecret" class="form-control" placeholder="Enter your Shopify webhook secret" />

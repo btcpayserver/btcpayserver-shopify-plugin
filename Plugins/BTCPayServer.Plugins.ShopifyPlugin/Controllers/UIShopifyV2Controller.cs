@@ -20,6 +20,7 @@ using BTCPayServer.Lightning.LndHub;
 using BTCPayServer.Payouts;
 using BTCPayServer.Plugins.Emails;
 using BTCPayServer.Plugins.Emails.Controllers;
+using BTCPayServer.Plugins.Emails.HostedServices;
 using BTCPayServer.Plugins.Emails.Services;
 using BTCPayServer.Plugins.ShopifyPlugin.Clients;
 using BTCPayServer.Plugins.ShopifyPlugin.Services;
@@ -46,7 +47,7 @@ public class UIShopifyV2Controller : Controller
 {
     private readonly RateFetcher _rateProvider;
     private readonly StoreRepository _storeRepo;
-    private readonly EmailService _emailService;
+    private readonly EventAggregator _eventAggregator;
     private readonly CurrencyNameTable _currencyNameTable;
     private readonly DefaultRulesCollection _defaultRules;
     private readonly InvoiceRepository _invoiceRepository;
@@ -59,8 +60,8 @@ public class UIShopifyV2Controller : Controller
     public UIShopifyV2Controller
 		(StoreRepository storeRepo,
         RateFetcher rateProvider,
-        EmailService emailService,
         IConfiguration configuration,
+        EventAggregator eventAggregator,
         CurrencyNameTable currencyNameTable,
         InvoiceRepository invoiceRepository,
         DefaultRulesCollection defaultRules,
@@ -72,11 +73,11 @@ public class UIShopifyV2Controller : Controller
         PullPaymentHostedService paymentHostedService)
 	{
 		_storeRepo = storeRepo;
-		_emailService = emailService;
 		_rateProvider = rateProvider;
 		_defaultRules = defaultRules;
         _payoutHandlers = payoutHandlers;
-		_dbContextFactory = dbContextFactory;
+        _eventAggregator = eventAggregator;
+        _dbContextFactory = dbContextFactory;
 		_currencyNameTable = currencyNameTable;
         _invoiceRepository = invoiceRepository;
 		_invoiceController = invoiceController;
@@ -507,7 +508,7 @@ public class UIShopifyV2Controller : Controller
     {
         var store = await _storeRepo.FindStore(storeId);
         var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
-        if (string.IsNullOrEmpty(settings?.Setup?.WebhookSecret) || store == null || client == null)
+        if (store == null || client == null)
             return BadRequest("Store isn't registered or refunds isn't configured with shopify plugin");
 
         var payload = JObject.Parse(requestBody);
@@ -571,7 +572,7 @@ public class UIShopifyV2Controller : Controller
         RateResult rateResult = await _rateProvider.FetchRate(new CurrencyPair(paymentMethod.Currency, invoice.Currency),
             store.GetStoreBlob().GetRateRules(_defaultRules), new StoreIdRateContext(store.Id), CancellationToken.None);
         if (rateResult.BidAsk == null)
-            return BadRequest($"to fetch rate {rateResult.EvaluatedRule}");
+            return BadRequest($"Unable to fetch rate {rateResult.EvaluatedRule}");
 
         CreatePullPaymentRequest createPullPayment = new CreatePullPaymentRequest
         {
@@ -618,7 +619,21 @@ public class UIShopifyV2Controller : Controller
             protocol: Request.Scheme
         );
         var customer = order.Customer;
-        await _emailService.SendRefundOrderEmail(storeId, customer?.DefaultEmailAddress?.EmailAddress, customer?.DisplayName, shopifyOrderId.ToString(), claimUrl);
+        var model = new JObject
+        {
+            ["RefundLink"] = claimUrl,
+            ["Order"] = new JObject
+            {
+                ["Id"] = shopifyOrderId.ToString()
+            },
+            ["Customer"] = new JObject
+            {
+                ["Email"] = customer?.DefaultEmailAddress?.EmailAddress ?? "",
+                ["Name"] = customer?.DisplayName ?? ""
+            }
+        };
+        var triggerEvent = new TriggerEvent(storeId, ShopifyMailTriggers.RefundCreated, model, null);
+        _eventAggregator.Publish(triggerEvent);
         return Ok();
     }
 }
