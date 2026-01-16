@@ -36,6 +36,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Primitives;
 using NBitcoin;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using StoreData = BTCPayServer.Data.StoreData;
 
@@ -504,11 +505,11 @@ public class UIShopifyV2Controller : Controller
         return Ok();
     }
 
-	public async Task<IActionResult> HandleRefundCreateWebhook(string storeId, string requestBody, ShopifyStoreSettings settings)
+	private async Task<IActionResult> HandleRefundCreateWebhook(string storeId, string requestBody, ShopifyStoreSettings settings)
     {
         var store = await _storeRepo.FindStore(storeId);
         var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
-        if (store == null || client == null)
+        if (settings?.Setup == null || store == null || client == null)
             return BadRequest("Store isn't registered or refunds isn't configured with shopify plugin");
 
         var payload = JObject.Parse(requestBody);
@@ -518,21 +519,25 @@ public class UIShopifyV2Controller : Controller
         if (!long.TryParse(payload["order_id"]!.ToString(), out var shopifyOrderId))
             return BadRequest("Order ID is invalid");
 
+        // refund_line_items contains the actual product to be refunded refunds
+        var refundLineItems = payload["refund_line_items"] as JArray ?? new JArray();
+        var lineItemsRefundAmount = refundLineItems.Sum(item => decimal.TryParse(item["subtotal"]?.ToString(), out var subtotal) ? subtotal : 0m);
+
+        // order_adjustments contains shipping refunds, restocking fees, and discrepancies
         var orderAdjustments = payload["order_adjustments"] as JArray ?? new JArray();
-        var totalRefundAmount = orderAdjustments
+        var adjustmentsRefundAmount = orderAdjustments
             .Where(adj =>
             {
                 var refundIdToken = adj["refund_id"];
                 if (refundIdToken == null || refundIdToken.Type == JTokenType.Null)
                     return false;
-
                 if (long.TryParse(refundIdToken.ToString(), out var refundId))
                     return refundId > 0;
-
                 return false;
             })
             .Sum(adj => Math.Abs(decimal.TryParse(adj["amount"]?.ToString(), out var amt) ? amt : 0m));
 
+        var totalRefundAmount = lineItemsRefundAmount + adjustmentsRefundAmount;
         if (totalRefundAmount <= 0)
             return BadRequest("No valid refund amount found in order adjustments");
 
@@ -580,7 +585,7 @@ public class UIShopifyV2Controller : Controller
             PayoutMethods = supportedPmis.Select(c => c.ToString()).ToArray(),
             AutoApproveClaims = true,
             BOLT11Expiration = store.GetStoreBlob().RefundBOLT11Expiration,
-            Description = $"Refund for shopify order ${shopifyOrderId}. Amount refunded {totalRefundAmount} {invoice.Currency}",
+            Description = $"Refund for shopify order {shopifyOrderId}. Amount refunded {totalRefundAmount} {invoice.Currency}",
         };
         switch (settings.Setup.SelectedRefundOption)
         {
