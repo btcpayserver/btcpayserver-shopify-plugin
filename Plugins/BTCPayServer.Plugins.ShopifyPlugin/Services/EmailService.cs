@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using BTCPayServer.Logging;
-using BTCPayServer.Services.Mails;
+using BTCPayServer.Plugins.Emails.Services;
 using Microsoft.Extensions.Logging;
 using MimeKit;
 
