@@ -17,6 +17,6 @@ public class ShopifyRefundWebhookSettingsViewModel
     [Required(ErrorMessage = "Please select a refund option")]
     public RefundOption? SelectedRefundOption { get; set; }
 
-    [Range(0, 100, ErrorMessage = "Spread must be between 0 and 100")]
+    [Range(0, 99, ErrorMessage = "Spread must be between 0 and 99")]
     public decimal SpreadPercentage { get; set; } = 0;
 }
