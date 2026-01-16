@@ -1,5 +1,6 @@
 @using BTCPayServer.Abstractions.Contracts
 @using BTCPayServer.Abstractions.Extensions
+@using BTCPayServer.Abstractions.Models
 @using BTCPayServer.Plugins.ShopifyPlugin
 @using BTCPayServer.Plugins.ShopifyPlugin.ViewModels
 @using Microsoft.AspNetCore.Routing
@@ -8,7 +9,7 @@
 @model ShopifyRefundWebhookSettingsViewModel
 @{
     var storeId = ScopeProvider.GetCurrentStoreId();
-    ViewData.SetActivePage(ShopifyV2PluginNavPages.Refunds, "Shopify Refund Settings", "Shopify");
+    ViewData.SetLayoutModel(new LayoutModel("Shopify-Refund", "Shopify Refund Settings"));
     var storeEmailSettingsConfigured = (bool)ViewData["StoreEmailSettingsConfigured"];
     Layout = "_Layout";
 }
