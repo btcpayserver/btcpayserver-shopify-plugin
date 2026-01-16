@@ -602,10 +602,14 @@ public class UIShopifyV2Controller : Controller
                 return BadRequest("No refund option configured in plugin");
         }
 
-        if (settings.Setup.SpreadPercentage is > 0 and <= 100)
+        if (settings.Setup.SpreadPercentage is > 0 and <= 99)
         {
             var reduceByAmount = createPullPayment.Amount * (settings.Setup.SpreadPercentage / 100);
             createPullPayment.Amount = Math.Round(createPullPayment.Amount - reduceByAmount, paymentMethod.Divisibility);
+            if (createPullPayment.Amount <= 0)
+            {
+                return BadRequest($"Refund amount becomes zero or negative after applying spread percentage of {settings.Setup.SpreadPercentage}%. Please reduce the spread percentage.");
+            }
         }
         await using var ctx = _dbContextFactory.CreateContext();
         var ppId = await _paymentHostedService.CreatePullPayment(store, createPullPayment);
