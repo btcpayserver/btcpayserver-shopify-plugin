@@ -33,9 +33,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Primitives;
 using NBitcoin;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using StoreData = BTCPayServer.Data.StoreData;
 
@@ -511,30 +513,17 @@ public class UIShopifyV2Controller : Controller
         if (settings?.Setup == null || store == null || client == null)
             return BadRequest("Store isn't registered or refunds isn't configured with shopify plugin");
 
-        var payload = JObject.Parse(requestBody);
-        if (payload?["order_id"] == null)
-            return BadRequest("Payload does not contain order_id");
-
-        if (!long.TryParse(payload["order_id"]!.ToString(), out var shopifyOrderId))
-            return BadRequest("Order ID is invalid");
+        // https://shopify.dev/docs/api/webhooks/latest?accordionItem=webhooks-refunds-create&reference=toml
+        var refundPayload = JsonConvert.DeserializeObject<ShopifyRefundWebhook>(requestBody);
+        if (refundPayload == null || refundPayload.OrderId <= 0)
+            return BadRequest("Invalid refund payload");
 
         // refund_line_items contains the actual product to be refunded refunds
-        var refundLineItems = payload["refund_line_items"] as JArray ?? new JArray();
-        var lineItemsRefundAmount = refundLineItems.Sum(item => Math.Abs(decimal.TryParse(item["subtotal"]?.ToString(), out var subtotal) ? subtotal : 0m));
+        var lineItemsRefundAmount = refundPayload.RefundLineItems.Sum(item => Math.Abs(item.Subtotal));
 
         // order_adjustments contains shipping refunds, restocking fees, and discrepancies
-        var orderAdjustments = payload["order_adjustments"] as JArray ?? new JArray();
-        var adjustmentsRefundAmount = orderAdjustments
-            .Where(adj =>
-            {
-                var refundIdToken = adj["refund_id"];
-                if (refundIdToken == null || refundIdToken.Type == JTokenType.Null)
-                    return false;
-                if (long.TryParse(refundIdToken.ToString(), out var refundId))
-                    return refundId > 0;
-                return false;
-            })
-            .Sum(adj => Math.Abs(decimal.TryParse(adj["amount"]?.ToString(), out var amt) ? amt : 0m));
+        var adjustmentsRefundAmount = refundPayload.OrderAdjustments
+            .Where(adj => adj.RefundId.HasValue && adj.RefundId.Value > 0).Sum(adj => Math.Abs(adj.Amount));
 
         var totalRefundAmount = lineItemsRefundAmount + adjustmentsRefundAmount;
         if (totalRefundAmount <= 0)
@@ -545,9 +534,9 @@ public class UIShopifyV2Controller : Controller
         if (!isEmailSettingsConfigured)
             return BadRequest("Email Server not configured for store");
 
-        using var l = await RefundLocks.LockAsync(shopifyOrderId, CancellationToken.None);
+        using var l = await RefundLocks.LockAsync(refundPayload.OrderId, CancellationToken.None);
 
-        if (await client.GetOrder(shopifyOrderId, true) is not { } order)
+        if (await client.GetOrder(refundPayload.OrderId, true) is not { } order)
             return BadRequest("Order is invalid");
 
         var containsKeyword = order.PaymentGatewayNames.Any(pgName => ShopifyHostedService.IsBTCPayServerGateway(pgName));
@@ -584,7 +573,7 @@ public class UIShopifyV2Controller : Controller
             PayoutMethods = supportedPmis.Select(c => c.ToString()).ToArray(),
             AutoApproveClaims = true,
             BOLT11Expiration = store.GetStoreBlob().RefundBOLT11Expiration,
-            Description = $"Refund for shopify order {shopifyOrderId}. Amount refunded {totalRefundAmount} {invoice.Currency}",
+            Description = $"Refund for shopify order {refundPayload.OrderId}. Amount refunded {totalRefundAmount} {invoice.Currency}",
         };
         switch (settings.Setup.SelectedRefundOption)
         {
@@ -632,7 +621,7 @@ public class UIShopifyV2Controller : Controller
             ["RefundLink"] = claimUrl,
             ["Order"] = new JObject
             {
-                ["Id"] = shopifyOrderId.ToString()
+                ["Id"] = refundPayload.OrderId.ToString()
             },
             ["Customer"] = new JObject
             {
