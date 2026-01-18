@@ -73,9 +73,9 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			return JsonConvert.DeserializeObject<AccessTokenResponse>(strResp);
 		}
 
-		public bool VerifyWebhookSignature(string body, string hmac)
+		public bool VerifyWebhookSignature(string body, string hmac, string webhookSecret)
 		{
-			var keyBytes = Encoding.UTF8.GetBytes(_credentials.ClientSecret);
+			var keyBytes = Encoding.UTF8.GetBytes(webhookSecret);
 			using (var hmacObj = new HMACSHA256(keyBytes))
 			{
 				var hashBytes = hmacObj.ComputeHash(Encoding.UTF8.GetBytes(body));
@@ -235,6 +235,18 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
                 name
                 cancelledAt
                 statusPageUrl
+                customer {
+                  displayName
+                  defaultEmailAddress {
+                    emailAddress
+                  }
+                }
+                btcpayInvoiceId: metafield(
+                    namespace: "custom"
+                    key: "btcpay_invoice_id"
+                ) {
+                    value
+                }
                 totalOutstandingSet {
                     shopMoney {
                         amount
@@ -282,7 +294,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
             """;
         public async Task<ShopifyOrder> GetOrder(long orderId, bool withTransactions = false)
 		{
-			// https://shopify.dev/docs/api/admin-graphql/2024-10/queries/order
+			// https://shopify.dev/docs/api/admin-graphql/2026-01/queries/order
 			var req = """
             query getOrderDetails($orderId: ID!, $includeTxs: Boolean!) {
               order(id: $orderId) {
@@ -306,7 +318,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			var jobj = new JObject() { ["query"] = req };
 			if (variables is not null)
 				jobj.Add("variables", variables);
-			return new HttpRequestMessage(HttpMethod.Post, $"{_shopUrl}/admin/api/2024-10/graphql.json")
+			return new HttpRequestMessage(HttpMethod.Post, $"{_shopUrl}/admin/api/2026-01/graphql.json")
 			{
 				Content = new StringContent(jobj.ToString(), Encoding.UTF8, "application/json")
 			};
@@ -430,7 +442,6 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			var d = Unwrap(respObj, "orderUpdate");
 			return ShopifyId.Parse(d["order"]["id"].Value<string>());
         }
-
     }
 
 

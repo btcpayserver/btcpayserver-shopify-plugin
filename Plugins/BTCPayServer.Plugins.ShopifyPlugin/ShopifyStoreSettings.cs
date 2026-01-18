@@ -24,5 +24,8 @@ namespace BTCPayServer.Plugins.ShopifyPlugin
 	    /// </summary>
 	    public string? Version { get; set; }
 	    public string? DeployedCommit { get; set; }
+        public string? WebhookSecret { get; set; }
+        public string? SelectedRefundOption { get; set; }
+        public decimal SpreadPercentage { get; set; }
     }
 }
