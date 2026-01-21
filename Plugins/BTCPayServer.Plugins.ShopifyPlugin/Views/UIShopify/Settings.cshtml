@@ -6,7 +6,7 @@
 @using BTCPayServer.Plugins.ShopifyPlugin.Blazor
 @model ShopifySettingsViewModel
 @{
-    ViewData.SetLayoutModel(new LayoutModel("Shopify-Settings", "Shopify Refund Settings") { ActiveCategory = "ShopifyV2" });
+    ViewData.SetLayoutModel(new LayoutModel("Shopify-Settings", "Shopify Settings") { ActiveCategory = "ShopifyV2" });
     Layout = "_Layout";
     bool shopifyCredsSet = Model.Step != ShopifySettingsViewModel.State.WaitingClientCreds;
     var storeId = (string)this.Context.GetRouteValue("storeId");
