@@ -1,4 +1,9 @@
-﻿using BTCPayServer.Client.Models;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using BTCPayServer.Client.Models;
 using BTCPayServer.Data;
 using BTCPayServer.Events;
 using BTCPayServer.HostedServices;
@@ -8,10 +13,6 @@ using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Rates;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin.Services;
 
@@ -71,8 +72,13 @@ public class ShopifyHostedService : EventHostedServiceBase
         }
     }
 
-    private static string[] _keywords = new[] { "bitcoin", "btc", "btcpayserver", "btcpay server" };
+    private static string[] _requiredAppScopes = new[] { "read_orders", "write_orders", "read_customers" };
+    public static bool HasRequiredShopifyScopes(IEnumerable<string> grantedScopes)
+    {
+        return _requiredAppScopes.All(required => grantedScopes.Contains(required, StringComparer.OrdinalIgnoreCase));
+    }
 
+    private static string[] _keywords = new[] { "bitcoin", "btc", "btcpayserver", "btcpay server" };
     public static bool IsBTCPayServerGateway(string gateway)
     {
         return _keywords.Any(keyword => gateway.Contains(keyword, StringComparison.OrdinalIgnoreCase));
