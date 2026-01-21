@@ -292,6 +292,29 @@ public class UIShopifyV2Controller : Controller
             });
             return RedirectToAction(nameof(Settings), new { storeId });
         }
+
+        var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
+        if (client is null)
+        {
+            this.TempData.SetStatusMessageModel(new StatusMessageModel()
+            {
+                Message = "Shopify plugin isn't configured properly",
+                Severity = StatusMessageModel.StatusSeverity.Error
+            });
+            return RedirectToAction(nameof(Settings), new { storeId });
+        }
+        var shopifyAppScopes = await client.GetGrantedAccessScopes();
+        var hasRequiredScope = ShopifyHostedService.HasRequiredShopifyScopes(shopifyAppScopes);
+        if (!hasRequiredScope)
+        {
+            this.TempData.SetStatusMessageModel(new StatusMessageModel()
+            {
+                Message = "The Shopify plugin and app is missing required permissions for refunds. Kindly upgrade the shopify fragment to the latest and redeploy the app (Step 2)",
+                Severity = StatusMessageModel.StatusSeverity.Error
+            });
+            return RedirectToAction(nameof(Settings), new { storeId });
+        }
+
         var emailSender = await _emailSenderFactory.GetEmailSender(storeId);
         var isEmailSettingsConfigured = (await emailSender.GetEmailSettings() ?? new EmailSettings()).IsComplete();
         ViewData["StoreEmailSettingsConfigured"] = isEmailSettingsConfigured;
