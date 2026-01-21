@@ -13,7 +13,7 @@ using Newtonsoft.Json.Serialization;
 using BTCPayServer.Plugins.ShopifyPlugin.JsonConverters;
 using Newtonsoft.Json.Converters;
 using Microsoft.AspNetCore.WebUtilities;
-using JArray = Newtonsoft.Json.Linq.JArray;
+using BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 {
@@ -313,7 +313,25 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			return d?.ToObject<ShopifyOrder>(JsonSerializer);
 		}
 
-		private HttpRequestMessage CreateGraphQLRequest(string req, JObject variables = null)
+        public async Task<List<string>> GetGrantedAccessScopes()
+        {
+            // https://shopify.dev/docs/api/admin-graphql/latest/queries/currentAppInstallation
+            var req = """
+            query GetAccessScopes {
+              currentAppInstallation {
+                accessScopes {
+                  handle
+                }
+              }
+            }
+            """;
+            var resp = await SendGraphQL(req, new JObject());
+            var d = Unwrap(resp, "currentAppInstallation");
+            var accessScopes = d?["accessScopes"]?.ToObject<List<AccessScopeHandle>>(JsonSerializer);
+            return accessScopes?.Select(s => s.Handle).ToList() ?? new List<string>();
+        }
+
+        private HttpRequestMessage CreateGraphQLRequest(string req, JObject variables = null)
 		{
 			var jobj = new JObject() { ["query"] = req };
 			if (variables is not null)

@@ -29,3 +29,9 @@ public class ShopifyOrderAdjustment
     [JsonProperty("amount")]
     public decimal Amount { get; set; }
 }
+
+public class AccessScopeHandle
+{
+    [JsonProperty("handle")]
+    public string Handle { get; set; }
+}
