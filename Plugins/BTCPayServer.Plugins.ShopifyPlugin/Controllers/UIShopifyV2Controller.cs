@@ -330,6 +330,7 @@ public class UIShopifyV2Controller : Controller
         Enum.TryParse<ShopifyRefundWebhookSettingsViewModel.RefundOption>(settings.Setup?.SelectedRefundOption, ignoreCase: true, out var refundOption);
         var vm = new ShopifyRefundWebhookSettingsViewModel
         {
+            ShopName = GetShopName(settings.Setup?.ShopUrl),
             WebhookUrl = Url.Action(nameof(Webhook), "UIShopifyV2", new { storeId }, Request.Scheme),
             WebhookSecret = settings.Setup?.WebhookSecret,
             SpreadPercentage = settings.Setup.SpreadPercentage,
