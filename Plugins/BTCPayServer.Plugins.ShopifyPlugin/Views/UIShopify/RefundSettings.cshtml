@@ -41,13 +41,16 @@
                     and sends a secure claim link to the customer by email.
                 </p>
                 <p class="mb-2">
-                    Copy the webhook URL below and paste it into your Shopify Admin dashboard.
+                    Copy the webhook URL below and create a webhook via
+                    <a href="https://admin.shopify.com/store/@(Model.ShopName)/settings/notifications/webhooks"
+                       target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">
+                        this link</a>. 
+                    Use the settings below:
                 </p>
                 <ul class="mb-2">
-                    <li>Go to <strong>Settings → Notifications → Webhooks</strong></li>
-                    <li>Create a webhook for the <strong>Refund create</strong> event</li>
-                    <li>Set the format to <strong>JSON</strong></li>
-                    <li>Use Webhook API version <strong>2026-01</strong></li>
+                    <li>Event: <strong>Refund create</strong></li>
+                    <li>Format: <strong>JSON</strong></li>
+                    <li>Webhook API version: <strong>2026-01</strong></li>
                 </ul>
             </div>
 
@@ -62,7 +65,7 @@
                     </div>
                 </div>
                 <div class="mb-4">
-                    <label asp-for="WebhookSecret" class="form-label fw-bold">Webhook Secret</label>
+                    <label asp-for="WebhookSecret" class="form-label fw-bold">Webhook Signature</label>
                     <input asp-for="WebhookSecret" class="form-control" placeholder="Enter your Shopify webhook secret" />
                     <span asp-validation-for="WebhookSecret" class="text-danger"></span>
                     <div class="form-text">
@@ -74,12 +77,12 @@
                     <label class="form-label fw-bold">Refund Option Method</label>
                     <span asp-validation-for="SelectedRefundOption" class="text-danger"></span>
                     <div class="form-check">
-                        <input class="form-check-input" type="radio" asp-for="SelectedRefundOption" value="RateThen" id="refundRateThen" />
-                        <label class="form-check-label" for="refundRateThen">Use exchange rate at time of original payment</label>
-                    </div>
-                    <div class="form-check">
                         <input class="form-check-input" type="radio" asp-for="SelectedRefundOption" value="CurrentRate" id="refundCurrentRate" />
                         <label class="form-check-label" for="refundCurrentRate"> Use current exchange rate at time of refund</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" asp-for="SelectedRefundOption" value="RateThen" id="refundRateThen" />
+                        <label class="form-check-label" for="refundRateThen">Use exchange rate at time of original payment</label>
                     </div>
                 </div>
 
