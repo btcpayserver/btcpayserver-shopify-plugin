@@ -74,12 +74,12 @@
                     <label class="form-label fw-bold">Refund Option Method</label>
                     <span asp-validation-for="SelectedRefundOption" class="text-danger"></span>
                     <div class="form-check">
-                        <input class="form-check-input" type="radio" asp-for="SelectedRefundOption" value="RateThen" id="refundRateThen" />
-                        <label class="form-check-label" for="refundRateThen">Use exchange rate at time of original payment</label>
-                    </div>
-                    <div class="form-check">
                         <input class="form-check-input" type="radio" asp-for="SelectedRefundOption" value="CurrentRate" id="refundCurrentRate" />
                         <label class="form-check-label" for="refundCurrentRate"> Use current exchange rate at time of refund</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" asp-for="SelectedRefundOption" value="RateThen" id="refundRateThen" />
+                        <label class="form-check-label" for="refundRateThen">Use exchange rate at time of original payment</label>
                     </div>
                 </div>
 
