@@ -16,7 +16,6 @@ using BTCPayServer.Controllers;
 using BTCPayServer.Data;
 using BTCPayServer.Filters;
 using BTCPayServer.HostedServices;
-using BTCPayServer.Lightning.LndHub;
 using BTCPayServer.Payouts;
 using BTCPayServer.Plugins.Emails;
 using BTCPayServer.Plugins.Emails.Controllers;
@@ -362,7 +361,8 @@ public class UIShopifyV2Controller : Controller
         return RedirectToAction(nameof(RefundSettings), new { storeId });
     }
 
-    static AsyncDuplicateLock OrderLocks = new AsyncDuplicateLock();
+    static readonly AsyncDuplicateLock OrderLocks = new AsyncDuplicateLock();
+
     [AllowAnonymous]
 	[EnableCors(CorsPolicies.All)]
 	[HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
@@ -391,7 +391,7 @@ public class UIShopifyV2Controller : Controller
         });
 
         // This prevent a race condition where two invoices get created for same order
-        using var l = await OrderLocks.LockAsync(orderId, cancellationToken);
+        using var l = await OrderLocks.LockAsync(orderId.ToString(CultureInfo.InvariantCulture), cancellationToken);
 
         var orderInvoices =
             invoices.Where(e => e.GetShopifyOrderId() == orderId).ToArray();
@@ -558,7 +558,7 @@ public class UIShopifyV2Controller : Controller
         if (!isEmailSettingsConfigured)
             return BadRequest("Email Server not configured for store");
 
-        using var l = await RefundLocks.LockAsync(refundPayload.OrderId, CancellationToken.None);
+        using var l = await RefundLocks.LockAsync(refundPayload.OrderId.ToString(CultureInfo.InvariantCulture), CancellationToken.None);
 
         if (await client.GetOrder(refundPayload.OrderId, true) is not { } order)
             return BadRequest("Order is invalid");
