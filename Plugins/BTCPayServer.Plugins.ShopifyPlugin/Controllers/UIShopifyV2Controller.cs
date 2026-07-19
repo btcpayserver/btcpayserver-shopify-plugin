@@ -388,7 +388,8 @@ public class UIShopifyV2Controller : Controller
         var invoices = await _invoiceRepository.GetInvoices(new InvoiceQuery()
         {
             TextSearch = searchTerm,
-            StoreId = new[] { storeId }
+            StoreId = new[] { storeId },
+            IncludeArchived = false
         });
 
         // This prevent a race condition where two invoices get created for same order
