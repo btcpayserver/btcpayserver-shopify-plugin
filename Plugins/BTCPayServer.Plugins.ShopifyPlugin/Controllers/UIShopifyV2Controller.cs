@@ -383,17 +383,18 @@ public class UIShopifyV2Controller : Controller
         if (!containsKeyword)
             return NotFound("Order wasn't fulfilled with BTCPay Server payment option");
 
+
         var orderId = order.Id.Id;
         var searchTerm = $"{Extensions.SHOPIFY_ORDER_ID_PREFIX}{orderId}";
+
+        // This prevent a race condition where two invoices get created for same order
+        using var l = await OrderLocks.LockAsync(orderId.ToString(CultureInfo.InvariantCulture), cancellationToken);
         var invoices = await _invoiceRepository.GetInvoices(new InvoiceQuery()
         {
             TextSearch = searchTerm,
             StoreId = new[] { storeId },
             IncludeArchived = false
         });
-
-        // This prevent a race condition where two invoices get created for same order
-        using var l = await OrderLocks.LockAsync(orderId.ToString(CultureInfo.InvariantCulture), cancellationToken);
 
         var orderInvoices =
             invoices.Where(e => e.GetShopifyOrderId() == orderId).ToArray();
