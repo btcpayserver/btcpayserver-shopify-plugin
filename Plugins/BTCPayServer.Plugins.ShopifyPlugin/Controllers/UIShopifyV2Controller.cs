@@ -339,6 +339,7 @@ public class UIShopifyV2Controller : Controller
     }
 
     [HttpPost("~/stores/{storeId}/plugins/shopify-v2/refunds/settings")]
+    [Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie, Policy = Policies.CanModifyStoreSettings)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RefundSettings(string storeId, ShopifyRefundWebhookSettingsViewModel vm)
     {
@@ -574,6 +575,9 @@ public class UIShopifyV2Controller : Controller
         var invoice = await _invoiceRepository.GetInvoice(order.BtcpayInvoiceId.Value);
         if (invoice == null)
             return BadRequest("No invoice matching this criteria");
+
+        if (invoice.StoreId != storeId || invoice.GetShopifyOrderId() != refundPayload.OrderId)
+            return BadRequest("Invoice does not belong to this store or order");
 
         if ((invoice.Refunds != null && invoice.Refunds.Any()) || !invoice.GetInvoiceState().CanRefund())
             return BadRequest("Cannot process invoice refund at the moment, as invoice either has active refunds or invoice state cannot process refund");
