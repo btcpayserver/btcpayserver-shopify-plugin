@@ -388,7 +388,7 @@ public class UIShopifyV2Controller : Controller
         var searchTerm = $"{Extensions.SHOPIFY_ORDER_ID_PREFIX}{orderId}";
 
         // This prevent a race condition where two invoices get created for same order
-        using var l = await OrderLocks.LockAsync(orderId.ToString(CultureInfo.InvariantCulture), cancellationToken);
+        using var l = await OrderLocks.LockAsync($"{storeId}:{orderId.ToString(CultureInfo.InvariantCulture)}", cancellationToken);
         var invoices = await _invoiceRepository.GetInvoices(new InvoiceQuery()
         {
             TextSearch = searchTerm,
@@ -495,7 +495,8 @@ public class UIShopifyV2Controller : Controller
     static readonly AsyncDuplicateLock RefundLocks = new AsyncDuplicateLock();
     [AllowAnonymous]
 	[IgnoreAntiforgeryToken]
-	[HttpPost("~/stores/{storeId}/plugins/shopify-v2/webhooks")]
+    [RequestSizeLimit(5_242_880)] // https://shopify.dev/docs/apps/build/events/delivery-structure#large-payloads
+    [HttpPost("~/stores/{storeId}/plugins/shopify-v2/webhooks")]
 	// Handles refunds, plus all forms of webhook... plus shopify requires to still listen to it...
 	// leaving it here.
 	public async Task<IActionResult> Webhook(string storeId)
@@ -561,7 +562,7 @@ public class UIShopifyV2Controller : Controller
         if (!isEmailSettingsConfigured)
             return BadRequest("Email Server not configured for store");
 
-        using var l = await RefundLocks.LockAsync(refundPayload.OrderId.ToString(CultureInfo.InvariantCulture), CancellationToken.None);
+        using var l = await RefundLocks.LockAsync($"{storeId}:{refundPayload.OrderId.ToString(CultureInfo.InvariantCulture)}", CancellationToken.None);
 
         if (await client.GetOrder(refundPayload.OrderId, true) is not { } order)
             return BadRequest("Order is invalid");
@@ -579,6 +580,9 @@ public class UIShopifyV2Controller : Controller
 
         if (invoice.StoreId != storeId || invoice.GetShopifyOrderId() != refundPayload.OrderId)
             return BadRequest("Invoice does not belong to this store or order");
+
+        if (totalRefundAmount > invoice.Price)
+            return BadRequest($"Refund amount {totalRefundAmount} exceeds the invoice amount {invoice.Price} {invoice.Currency}");
 
         if ((invoice.Refunds != null && invoice.Refunds.Any()) || !invoice.GetInvoiceState().CanRefund())
             return BadRequest("Cannot process invoice refund at the moment, as invoice either has active refunds or invoice state cannot process refund");
