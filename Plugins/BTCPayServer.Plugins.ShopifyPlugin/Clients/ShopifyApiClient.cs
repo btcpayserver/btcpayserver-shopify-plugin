@@ -248,7 +248,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
                   }
                 }
                 """ + "\n" + OrderData;
-            var resp = await SendGraphQL(req, new JObject() { ["query"] = $"checkout_token:{checkoutToken}", ["includeTxs"] = withTransactions });
+            var resp = await SendGraphQL(req, new JObject() { ["query"] = $"checkout_token:\"{checkoutToken}\"", ["includeTxs"] = withTransactions });
             return resp["data"]["orders"]["edges"] switch
             {
 				JArray a when a.Count > 0 => a[0]["node"].ToObject<ShopifyOrder>(JsonSerializer),
@@ -427,14 +427,28 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			if (errors.Count != 0)
 				throw new ShopifyApiException(errors[0]["message"].Value<string>());
 		}
-		private async Task<JObject> SendGraphQL(string req, JObject variables = null)
-		{
-			var httpReq = CreateGraphQLRequest(req, variables);
-			using var resp = await _httpClient.SendAsync(httpReq);
-			var strResp = await resp.Content.ReadAsStringAsync();
-			resp.EnsureSuccessStatusCode();
-			return JObject.Parse(strResp);
-		}
+
+        private async Task<JObject> SendGraphQL(string req, JObject variables = null)
+        {
+            var httpReq = CreateGraphQLRequest(req, variables);
+            using var resp = await _httpClient.SendAsync(httpReq);
+            var strResp = await resp.Content.ReadAsStringAsync();
+            if (!resp.IsSuccessStatusCode)
+                throw new ShopifyApiException($"Shopify returned {(int)resp.StatusCode}");
+            JObject json;
+            try
+            {
+                json = JObject.Parse(strResp);
+            }
+            catch (JsonReaderException)
+            {
+                throw new ShopifyApiException("Shopify returned a response that isn't JSON");
+            }
+            if (json["errors"] is JArray { Count: > 0 } errors)
+                throw new ShopifyApiException(errors[0]?["message"]?.ToString() ?? "Shopify GraphQL error");
+            return json;
+        }
+
 
         public async Task<ShopifyId> CompleteDraftOrder(long orderId)
         {
