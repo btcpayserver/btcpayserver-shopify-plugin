@@ -3,6 +3,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -38,6 +39,7 @@ using Microsoft.Extensions.Primitives;
 using NBitcoin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using NicolasDorier.RateLimits;
 using StoreData = BTCPayServer.Data.StoreData;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin;
@@ -88,7 +90,9 @@ public class UIShopifyV2Controller : Controller
     }
 	public StoreData CurrentStore => HttpContext.GetStoreData();
 
-	public ShopifyClientFactory ShopifyClientFactory { get; }
+    static readonly Regex CheckoutTokenFormat = new("^[A-Za-z0-9_-]{1,128}$", RegexOptions.Compiled);
+
+    public ShopifyClientFactory ShopifyClientFactory { get; }
 
 	[AllowAnonymous]
 	[HttpGet("~/stores/{storeId}/plugins/shopify-v2")]
@@ -366,15 +370,25 @@ public class UIShopifyV2Controller : Controller
 
     [AllowAnonymous]
 	[EnableCors(CorsPolicies.All)]
-	[HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
+    [RateLimitsFilter(ZoneLimits.PublicInvoices, Scope = RateLimitsScope.RemoteAddress)]
+    [HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
     public async Task<IActionResult> Checkout(string storeId, string? checkout_token, CancellationToken cancellationToken, bool redirect = true)
     {
-        if (checkout_token is null)
+        if (checkout_token is null || !CheckoutTokenFormat.IsMatch(checkout_token))
             return BadRequest("Invalid checkout token");
         var client = await this.ShopifyClientFactory.CreateAPIClient(storeId);
         if (client is null)
             return BadRequest("Shopify plugin isn't configured properly");
-        var order = await client.GetOrderByCheckoutToken(checkout_token, true);
+
+        ShopifyOrder? order;
+        try
+        {
+            order = await client.GetOrderByCheckoutToken(checkout_token, true);
+        }
+        catch (Exception e) when (e is HttpRequestException or ShopifyApiException or TaskCanceledException)
+        {
+            return StatusCode(503, "Shopify is unavailable right now, please try again in a moment");
+        }
         var store = await _storeRepo.FindStore(storeId);
         if (order is null || store is null)
             return BadRequest("Invalid checkout token");
@@ -441,17 +455,19 @@ public class UIShopifyV2Controller : Controller
 	        return BadRequest(e.Message);
         }
 
-        await client.UpdateOrderMetafields(new()
-		{
-			Id = ShopifyId.Order(orderId),
-			Metafields = [
-				new()
-				{
-					Namespace = "custom",
-					Key = "btcpay_checkout_url",
-					Type = "single_line_text_field",
-					Value = Url.Action(nameof(Checkout), "UIShopifyV2", new { storeId, checkout_token }, Request.Scheme)
-				},
+        try
+        {
+            await client.UpdateOrderMetafields(new()
+            {
+                Id = ShopifyId.Order(orderId),
+                Metafields = [
+                new()
+                {
+                    Namespace = "custom",
+                    Key = "btcpay_checkout_url",
+                    Type = "single_line_text_field",
+                    Value = Url.Action(nameof(Checkout), "UIShopifyV2", new { storeId, checkout_token }, Request.Scheme)
+                },
                 new()
                 {
                     Namespace = "custom",
@@ -460,7 +476,10 @@ public class UIShopifyV2Controller : Controller
                     Value = invoice.Id
                 }
             ]
-		});
+            });
+        }
+        catch (Exception e) when (e is HttpRequestException or ShopifyApiException or TaskCanceledException)
+        { }
         return redirect ? RedirectToInvoiceCheckout(invoice.Id) : Ok();
     }
 
