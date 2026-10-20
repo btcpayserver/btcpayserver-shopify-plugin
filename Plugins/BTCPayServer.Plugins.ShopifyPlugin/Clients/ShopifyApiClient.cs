@@ -435,7 +435,15 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
             var strResp = await resp.Content.ReadAsStringAsync();
             if (!resp.IsSuccessStatusCode)
                 throw new ShopifyApiException($"Shopify returned {(int)resp.StatusCode}");
-            var json = JObject.Parse(strResp);
+            JObject json;
+            try
+            {
+                json = JObject.Parse(strResp);
+            }
+            catch (JsonReaderException)
+            {
+                throw new ShopifyApiException("Shopify returned a response that isn't JSON");
+            }
             if (json["errors"] is JArray { Count: > 0 } errors)
                 throw new ShopifyApiException(errors[0]?["message"]?.ToString() ?? "Shopify GraphQL error");
             return json;

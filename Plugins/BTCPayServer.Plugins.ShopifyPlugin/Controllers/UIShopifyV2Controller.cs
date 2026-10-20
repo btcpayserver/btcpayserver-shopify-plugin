@@ -370,7 +370,7 @@ public class UIShopifyV2Controller : Controller
 
     [AllowAnonymous]
 	[EnableCors(CorsPolicies.All)]
-    [RateLimitsFilter(ZoneLimits.PublicInvoices, Scope = RateLimitsScope.RemoteAddress)]
+    [RateLimitsFilter(ShopifyRateLimitStartupTask.CheckoutZone, Scope = RateLimitsScope.RemoteAddress)]
     [HttpGet("~/stores/{storeId}/plugins/shopify-v2/checkout")]
     public async Task<IActionResult> Checkout(string storeId, string? checkout_token, CancellationToken cancellationToken, bool redirect = true)
     {

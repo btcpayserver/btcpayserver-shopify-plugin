@@ -1,4 +1,5 @@
 using BTCPayServer.Abstractions.Contracts;
+using BTCPayServer.Abstractions.Extensions;
 using BTCPayServer.Abstractions.Models;
 using BTCPayServer.Plugins.Emails;
 using BTCPayServer.Plugins.Emails.Views;
@@ -17,6 +18,7 @@ public class Plugin : BaseBTCPayServerPlugin
     public override void Execute(IServiceCollection services)
     {
         services.AddUIExtension("header-nav", "ShopifyPluginHeaderNav");
+        services.AddStartupTask<ShopifyRateLimitStartupTask>();
         services.AddSingleton<ShopifyClientFactory>();
         services.AddHostedService<ShopifyHostedService>();
         RegisterShopifyEmailTriggers(services);
