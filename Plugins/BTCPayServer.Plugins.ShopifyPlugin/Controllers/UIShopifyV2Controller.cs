@@ -332,8 +332,9 @@ public class UIShopifyV2Controller : Controller
             ShopName = GetShopName(settings.Setup?.ShopUrl),
             WebhookUrl = Url.Action(nameof(Webhook), "UIShopifyV2", new { storeId }, Request.Scheme),
             WebhookSecret = settings.Setup?.WebhookSecret,
-            SpreadPercentage = settings.Setup.SpreadPercentage,
-            SelectedRefundOption = refundOption
+            WebhookSecretSet = !string.IsNullOrEmpty(settings.Setup?.WebhookSecret),
+            SpreadPercentage = settings.Setup?.SpreadPercentage ?? 0,
+            SelectedRefundOption = refundOption,
         };
         return View("/Views/UIShopify/RefundSettings.cshtml", vm);
     }
@@ -350,7 +351,15 @@ public class UIShopifyV2Controller : Controller
         }
         var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName) ?? new();
         settings.Setup ??= new();
-        settings.Setup.WebhookSecret = vm.WebhookSecret;
+        if (!ModelState.IsValid)
+        {
+            vm.WebhookUrl = Url.Action(nameof(Webhook), "UIShopifyV2", new { storeId }, Request.Scheme);
+            vm.WebhookSecret = null;
+            vm.WebhookSecretSet = !string.IsNullOrEmpty(settings.Setup.WebhookSecret);
+            return View("/Views/UIShopify/RefundSettings.cshtml", vm);
+        }
+        if (!string.IsNullOrWhiteSpace(vm.WebhookSecret))
+            settings.Setup.WebhookSecret = vm.WebhookSecret.Trim();
         settings.Setup.SpreadPercentage = vm.SpreadPercentage;
         settings.Setup.SelectedRefundOption = vm.SelectedRefundOption.ToString();
         await _storeRepo.UpdateSetting<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName, settings);
@@ -630,14 +639,18 @@ public class UIShopifyV2Controller : Controller
                 return BadRequest($"Refund amount becomes zero or negative after applying spread percentage of {settings.Setup.SpreadPercentage}%. Please reduce the spread percentage.");
             }
         }
-        await using var ctx = _dbContextFactory.CreateContext();
         var ppId = await _paymentHostedService.CreatePullPayment(store, createPullPayment);
-        ctx.Refunds.Add(new RefundData
+        try
         {
-            InvoiceDataId = invoice.Id,
-            PullPaymentDataId = ppId
-        });
-        await ctx.SaveChangesAsync();
+            await using var ctx = _dbContextFactory.CreateContext();
+            ctx.Refunds.Add(new RefundData { InvoiceDataId = invoice.Id, PullPaymentDataId = ppId });
+            await ctx.SaveChangesAsync();
+        }
+        catch
+        {
+            await _paymentHostedService.Cancel(new PullPaymentHostedService.CancelRequest(ppId));
+            throw;
+        }
 
         var claimUrl = Url.Action(
             action: nameof(UIPullPaymentController.ViewPullPayment),

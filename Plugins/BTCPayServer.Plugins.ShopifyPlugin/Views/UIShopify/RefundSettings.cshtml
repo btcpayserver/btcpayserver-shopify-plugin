@@ -66,7 +66,8 @@
                 </div>
                 <div class="mb-4">
                     <label asp-for="WebhookSecret" class="form-label fw-bold">Webhook Signature</label>
-                    <input asp-for="WebhookSecret" class="form-control" placeholder="Enter your Shopify webhook secret" />
+                    <input asp-for="WebhookSecret" class="form-control" type="password" value="" autocomplete="new-password"
+                           placeholder="@(Model.WebhookSecretSet ? "Saved. Enter a new value to replace it" : "Enter your Shopify webhook secret")" />
                     <span asp-validation-for="WebhookSecret" class="text-danger"></span>
                     <div class="form-text">
                         Your webhook secret is displayed on the webhook page

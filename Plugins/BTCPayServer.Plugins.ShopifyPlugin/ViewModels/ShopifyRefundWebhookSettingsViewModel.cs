@@ -13,6 +13,7 @@ public class ShopifyRefundWebhookSettingsViewModel
     public string ShopName { get; set; }
     public string WebhookUrl { get; set; }
     public string WebhookSecret { get; set; }
+    public bool WebhookSecretSet { get; set; }
     [Required(ErrorMessage = "Please select a refund option")]
     public RefundOption SelectedRefundOption { get; set; } = RefundOption.CurrentRate;
 
