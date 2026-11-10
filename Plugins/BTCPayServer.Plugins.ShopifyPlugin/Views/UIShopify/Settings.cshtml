@@ -1,6 +1,5 @@
 @using BTCPayServer.Abstractions.Extensions
 @using BTCPayServer.Abstractions.Models
-@using BTCPayServer.Plugins.ShopifyPlugin
 @using BTCPayServer.Plugins.ShopifyPlugin.ViewModels
 @using Microsoft.AspNetCore.Routing
 @using BTCPayServer.Plugins.ShopifyPlugin.Blazor
@@ -77,8 +76,10 @@
 
                             <div class="form-group">
                                 <label asp-for="ClientSecret" class="form-label"></label>
-                                <input asp-for="ClientSecret" class="form-control" type="password" value="@Model?.ClientSecret"
-                                       readonly="@shopifyCredsSet" disabled="@shopifyCredsSet"/>
+                                <input asp-for="ClientSecret" class="form-control" type="password" value="@(shopifyCredsSet ? "" : Model?.ClientSecret)"
+                                       placeholder="@(shopifyCredsSet ? new string('•', Model?.ClientSecret?.Length ?? 0) : null)"
+                                       readonly="@shopifyCredsSet" disabled="@shopifyCredsSet" />
+
                                 <span asp-validation-for="ClientSecret" class="text-danger"></span>
                             </div>
                             @if (Model.Step == ShopifySettingsViewModel.State.WaitingClientCreds)

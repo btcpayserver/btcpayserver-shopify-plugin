@@ -1,19 +1,20 @@
-﻿using Newtonsoft.Json.Linq;
-using Newtonsoft.Json;
-using System;
-using System.Linq;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
-using Microsoft.IdentityModel.Tokens;
+using System.Linq;
+using System.Net.Http;
 using System.Security.Cryptography;
-using Newtonsoft.Json.Serialization;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using BTCPayServer.Plugins.ShopifyPlugin.JsonConverters;
-using Newtonsoft.Json.Converters;
-using Microsoft.AspNetCore.WebUtilities;
 using BTCPayServer.Plugins.ShopifyPlugin.ViewModels;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 
 namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 {
@@ -27,13 +28,32 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			_httpClient = httpClient;
 			_credentials = appCredentials;
 		}
-		/// <summary>
-		/// Validate a session token
-		/// </summary>
-		/// <param name="sessionId"></param>
-		/// <returns></returns>
-		/// <exception cref="SecurityTokenInvalidIssuerException">storeUrl</exception>
-		public (string ShopUrl, string Issuer) ValidateSessionToken(string sessionId, bool skipLifeTimeCheck = false)
+
+        private static readonly Regex ShopHostRegex =
+            new(@"^[a-z0-9][a-z0-9\-]*\.myshopify\.com$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        public static bool TryNormalizeShopUrl(string url, out string normalized)
+        {
+            normalized = "";
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return false;
+            if (uri.Scheme != Uri.UriSchemeHttps || !uri.IsDefaultPort || uri.UserInfo.Length != 0)
+                return false;
+            if (uri.AbsolutePath != "/" || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+                return false;
+            if (!ShopHostRegex.IsMatch(uri.Host))
+                return false;
+            normalized = $"https://{uri.Host}";
+            return true;
+        }
+
+        /// <summary>
+        /// Validate a session token
+        /// </summary>
+        /// <param name="sessionId"></param>
+        /// <returns></returns>
+        /// <exception cref="SecurityTokenInvalidIssuerException">storeUrl</exception>
+        public (string ShopUrl, string Issuer) ValidateSessionToken(string sessionId, bool skipLifeTimeCheck = false)
 		{
 			var handler = new JwtSecurityTokenHandler();
 			var token = handler.ReadJwtToken(sessionId);
@@ -46,11 +66,16 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 				IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_credentials.ClientSecret)),
 				ValidAudiences = [_credentials.ClientId],
 			}, out _);
-			var storeUrl = token.Claims.FirstOrDefault(c => c.Type == "dest")?.Value;
-			if (!token.Issuer.StartsWith(storeUrl))
-				throw new SecurityTokenInvalidIssuerException("Invalid Issuer");
+            var dest = token.Claims.FirstOrDefault(c => c.Type == "dest")?.Value;
+            if (!TryNormalizeShopUrl(dest, out var storeUrl))
+                throw new SecurityTokenInvalidIssuerException("Invalid shop URL");
+
+            if (!Uri.TryCreate(token.Issuer, UriKind.Absolute, out var issuer) ||
+                !string.Equals(issuer.Host, new Uri(storeUrl).Host, StringComparison.OrdinalIgnoreCase))
+                throw new SecurityTokenInvalidIssuerException("Invalid Issuer");
+
             return (storeUrl, token.Issuer);
-		}
+        }
 		public async Task<AccessTokenResponse> GetAccessToken(string shopUrl, string sessionId)
 		{
 			ValidateSessionToken(sessionId);
@@ -63,8 +88,11 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 				["subject_token_type"] = "urn:ietf:params:oauth:token-type:id_token",
 				["requested_token_type"] = "urn:shopify:params:oauth:token-type:offline-access-token"
 			};
-			var req = new HttpRequestMessage(HttpMethod.Post, $"{shopUrl}/admin/oauth/access_token");
-			req.Content = new StringContent(body.ToString(), Encoding.UTF8, "application/json");
+            if (!TryNormalizeShopUrl(shopUrl, out var safeShopUrl))
+                throw new ShopifyApiException("Invalid shop URL");
+
+            var req = new HttpRequestMessage(HttpMethod.Post, $"{safeShopUrl}/admin/oauth/access_token");
+            req.Content = new StringContent(body.ToString(), Encoding.UTF8, "application/json");
 			req.Headers.Add("Accept", "application/json");
 			using var resp = await _httpClient.SendAsync(req);
 			var strResp = await resp.Content?.ReadAsStringAsync();
@@ -220,7 +248,7 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
                   }
                 }
                 """ + "\n" + OrderData;
-            var resp = await SendGraphQL(req, new JObject() { ["query"] = $"checkout_token:{checkoutToken}", ["includeTxs"] = withTransactions });
+            var resp = await SendGraphQL(req, new JObject() { ["query"] = $"checkout_token:\"{checkoutToken}\"", ["includeTxs"] = withTransactions });
             return resp["data"]["orders"]["edges"] switch
             {
 				JArray a when a.Count > 0 => a[0]["node"].ToObject<ShopifyOrder>(JsonSerializer),
@@ -399,14 +427,28 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Clients
 			if (errors.Count != 0)
 				throw new ShopifyApiException(errors[0]["message"].Value<string>());
 		}
-		private async Task<JObject> SendGraphQL(string req, JObject variables = null)
-		{
-			var httpReq = CreateGraphQLRequest(req, variables);
-			using var resp = await _httpClient.SendAsync(httpReq);
-			var strResp = await resp.Content.ReadAsStringAsync();
-			resp.EnsureSuccessStatusCode();
-			return JObject.Parse(strResp);
-		}
+
+        private async Task<JObject> SendGraphQL(string req, JObject variables = null)
+        {
+            var httpReq = CreateGraphQLRequest(req, variables);
+            using var resp = await _httpClient.SendAsync(httpReq);
+            var strResp = await resp.Content.ReadAsStringAsync();
+            if (!resp.IsSuccessStatusCode)
+                throw new ShopifyApiException($"Shopify returned {(int)resp.StatusCode}");
+            JObject json;
+            try
+            {
+                json = JObject.Parse(strResp);
+            }
+            catch (JsonReaderException)
+            {
+                throw new ShopifyApiException("Shopify returned a response that isn't JSON");
+            }
+            if (json["errors"] is JArray { Count: > 0 } errors)
+                throw new ShopifyApiException(errors[0]?["message"]?.ToString() ?? "Shopify GraphQL error");
+            return json;
+        }
+
 
         public async Task<ShopifyId> CompleteDraftOrder(long orderId)
         {
