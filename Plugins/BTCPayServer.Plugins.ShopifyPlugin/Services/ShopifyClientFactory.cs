@@ -64,14 +64,15 @@ namespace BTCPayServer.Plugins.ShopifyPlugin.Services
 			return new AppDeployerClient(this.HttpClientFactory.CreateClient("SHOPIFY_DEPLOYER"), deployerUri);
 		}
 
-		public async Task<ShopifyApiClient?> CreateAPIClient(string storeId)
+        public async Task<ShopifyApiClient?> CreateAPIClient(string storeId)
         {
-			var settings = await GetSettings(storeId);
-			if (settings?.Setup is { ShopUrl: string shopUrl, AccessToken: string accessToken })
-				return new ShopifyApiClient(HttpClientFactory.CreateClient("SHOPIFY_API_CLIENT"), shopUrl, new ShopifyApiClientCredentials.AccessToken(accessToken));
-			return null;
-		}
-		public async Task<ShopifyAppClient?> CreateAppClient(string storeId)
+            var settings = await GetSettings(storeId);
+            if (settings?.Setup is { ShopUrl: string shopUrl, AccessToken: string accessToken } &&
+                ShopifyAppClient.TryNormalizeShopUrl(shopUrl, out var safeShopUrl))
+                return new ShopifyApiClient(HttpClientFactory.CreateClient("SHOPIFY_API_CLIENT"), safeShopUrl, new ShopifyApiClientCredentials.AccessToken(accessToken));
+            return null;
+        }
+        public async Task<ShopifyAppClient?> CreateAppClient(string storeId)
 		{
 			var settings = await GetSettings(storeId);
 			if (settings?.Setup is { ClientId: string id, ClientSecret: string secret })
