@@ -344,15 +344,12 @@ public class UIShopifyV2Controller : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RefundSettings(string storeId, ShopifyRefundWebhookSettingsViewModel vm)
     {
-        if (!ModelState.IsValid)
-        {
-            vm.WebhookUrl = Url.Action(nameof(Webhook), "UIShopifyV2", new { storeId }, Request.Scheme);
-            return View("/Views/UIShopify/RefundSettings.cshtml", vm);
-        }
         var settings = await _storeRepo.GetSettingAsync<ShopifyStoreSettings>(storeId, ShopifyStoreSettings.SettingsName) ?? new();
         settings.Setup ??= new();
         if (!ModelState.IsValid)
         {
+            var emailSender = await _emailSenderFactory.GetEmailSender(storeId);
+            ViewData["StoreEmailSettingsConfigured"] = (await emailSender.GetEmailSettings() ?? new EmailSettings()).IsComplete();
             vm.WebhookUrl = Url.Action(nameof(Webhook), "UIShopifyV2", new { storeId }, Request.Scheme);
             vm.WebhookSecret = null;
             vm.WebhookSecretSet = !string.IsNullOrEmpty(settings.Setup.WebhookSecret);
